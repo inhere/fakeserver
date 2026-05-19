@@ -11,6 +11,7 @@
 | 2026-05-19 | v0.2-draft | inhere | 补充：环境配置文件 / Proxy 路由 / 项目注册 / Web UI / Faker；MVP 纳入 faker + proxy；其余按 v0.2–v0.4 分期。`.env` 命名空间调整（文件 env），原 OS env 改名 `.osenv` |
 | 2026-05-19 | v0.3-draft | inhere | 复审补全：跨条目去重报错、OPTIONS 顺序、Content-Type 推断表、admin CORS 豁免、proxy 模板边界、默认配置查找、init 产物、bodyLimit 适用对象、cases 兜底、启动摘要样例、CLI 长格式、proxy 错误 route 字段、前台运行说明、字段顺序进未决项、静态目录服务进 v1.x |
 | 2026-05-19 | v0.3-phase1-applied | inhere | Phase 1 落地：项目骨架 + internal/cli + 极薄 cmd 入口 + echo（rux v2 MountEchoRoutes）+ admin /healthz + E2E。rux 实际为 v2.0.0（module path `github.com/gookit/rux/v2`），与原 design 假设接口名不同，详见 §13 已落地条目 |
+| 2026-05-19 | v0.3-phase2-applied | inhere | Phase 2 落地：internal/config 包（schema/loader/include/merge/defaults/validate）+ cli init/check/routes + serve 接入 -c。mock 路由仅打印摘要，实际响应留 Phase 3 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1200,6 +1201,14 @@ if seed == 0 {
   - `/ip` 端点返回字段名是 `origin`（不是 design 与 plan 假设的 `ip`）
   - `/status/{非法 code}` fallback 到 200（不是 400）
   - `MountEchoRoutes` 末尾注册了 `/*path` catch-all，事实上代替了 `r.NotFound(...)`——不需要再单独挂 NotFound handler
+
+### 已落地（Phase 2 阶段确认）
+
+- **JSON5 解析库**：`github.com/titanous/json5 v1.0.0` 已接入；smoke 锁定其支持注释、无引号 key、单引号字符串、trailing comma 等扩展
+- **`@include` 实际语义**：被引入文件的根可以是对象、数组或单个 route；string include 在 routes 数组里**自动拍平**，在其他位置**整体替换**；仅支持 `.json`/`.json5` 后缀；glob 无匹配视为错误
+- **schema 中的 `Log` 字段用指针 `*bool`**：因为零值无法区分"未设置"与"显式 false"；Phase 5 接入 logger 中间件时按 `Log == nil` 视为默认开
+- **Validate 范围**：Phase 2 校验所有非依赖 expr/template 的规则（互斥、必填、重复、保留前缀、enum 校验、bodyFile 存在性、proxy.target scheme）。`when` 表达式语法与 `body` 模板语法的校验留给 Phase 4/3 与对应库一并接入
+- **Phase 2 边界**：`fakeserver serve -c <path>` 启动时**打印**路由摘要但**不注册** mock 路由 handler；配置中的 path 在 Phase 3 接入前仍走 echo `/*path` 兜底
 
 ### 待评审
 

@@ -28,7 +28,7 @@
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
 | **1** | 项目骨架 + 零配置 echo | `cmd/fakeserver/`、`internal/cli/`、`internal/echo/`、`internal/admin/` + `serve` 子命令 | rux/v2、gcli/v3、goutil | — | ~400 行 | ✅ 已完成 |
-| **2** | 配置加载 + 路由摘要 | `internal/config/`、`internal/cli/{init,check,routes}.go` | titanous/json5 | Phase 1 | ~800 行 | 待开始 |
+| **2** | 配置加载 + 路由摘要 | `internal/config/`、`internal/cli/{init,check,routes}.go` | titanous/json5 | Phase 1 | ~800 行 | ✅ 已完成 (commit 4182891..be61621) |
 | **3** | 模板与单一响应 mock | `internal/tpl/`（含 faker）、`internal/mock/{router,responder}.go` | easytpl、gofakeit | Phase 2 | ~900 行 | 待开始 |
 | **4** | 多响应 + 条件分支 + bodyFile + proxy | `internal/mock/{selector,matcher}.go`、`internal/proxy/` | expr-lang/expr | Phase 3 | ~600 行 | 待开始 |
 | **5** | 运行时与可观测性 | `internal/middleware/`、`internal/config/watcher.go`、admin `/routes` | fsnotify | Phase 4 | ~500 行 | 待开始 |
@@ -118,6 +118,13 @@
 6. 默认查找路径行为验证：在 CWD 无 `-c` 时，3 档候选都不存在则降回 echo-only 模式（不报错）
 
 **对 design 章节的映射**：§3 全章（顶层结构 / Route 字段 / include / 合并 / 默认查找 / 校验）、§5.7 CLI 子命令（init/check/routes 三行）、§7 测试策略 `internal/config/*_test.go` 段。
+
+**实际落地偏差**：
+
+- `loadFile()` 返回类型从 plan 假设的 `map[string]any` 调整为 `any`——因为被 @include 的文件根可能是数组（如 routes/users.json5 是 `[ {...}, {...} ]` 而非对象）。`Load` 主流程对根做了 map 类型断言以保证主配置仍是对象
+- 其余实现与 plan 一致；无设计偏离
+
+**Phase 2 测试覆盖**：49 个用例（admin 1 + cli 16 + config 26 + echo 6）；`internal/config` 覆盖率 88.5%
 
 ---
 
