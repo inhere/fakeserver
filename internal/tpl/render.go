@@ -13,6 +13,3 @@ type Renderer interface {
 	Render(src string, ctx *RenderCtx) (string, error)
 }
 
-// RenderCtx is forward-declared here so the stub compiles. Task 5 puts
-// the real fields in context.go.
-type RenderCtx struct{}
