@@ -1,0 +1,20 @@
+{
+  server: { host: "127.0.0.1", port: 8080, log: false },
+  globals: { apiVersion: "v1", userPool: ["alice", "bob"] },
+  fallback: "404",
+  routes: [
+    { method: "GET", path: "/ping", body: "pong" },
+    {
+      method: ["GET", "HEAD"],
+      path: "/users/{id}",
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+      body: { id: "{{ .request.params.id }}", name: "alice" },
+    },
+    {
+      method: "*",
+      path: "/api/proxy/*rest",
+      proxy: { target: "http://upstream.local:8080", timeout: "10s" },
+    },
+  ],
+}

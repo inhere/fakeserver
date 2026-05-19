@@ -40,3 +40,87 @@ func TestJSON5Lib_SmokeErrorMentionsContext(t *testing.T) {
 	}
 	// 仅验证有 error；具体 message 由 lib 决定
 }
+
+func TestLoad_SingleMinimal(t *testing.T) {
+	cfg, err := Load([]string{"testdata/valid/single-minimal.json5"}, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil cfg")
+	}
+	// 默认值已填
+	if cfg.Server.Port != 3000 {
+		t.Errorf("expected default port 3000, got %d", cfg.Server.Port)
+	}
+	if cfg.Fallback != "echo" {
+		t.Errorf("expected default fallback=echo, got %q", cfg.Fallback)
+	}
+	// routes
+	if len(cfg.Routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(cfg.Routes))
+	}
+	r := cfg.Routes[0]
+	if len(r.Method) != 1 || r.Method[0] != "GET" {
+		t.Errorf("expected method=[GET], got %v", r.Method)
+	}
+	if r.Path != "/ping" {
+		t.Errorf("expected path=/ping, got %q", r.Path)
+	}
+	if r.Body != "pong" {
+		t.Errorf("expected body=\"pong\", got %v", r.Body)
+	}
+}
+
+func TestLoad_SingleFull_NormalizesMethodAndPreservesUserValues(t *testing.T) {
+	cfg, err := Load([]string{"testdata/valid/single-full.json5"}, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// server 用户值保留
+	if cfg.Server.Host != "127.0.0.1" {
+		t.Errorf("expected host=127.0.0.1, got %q", cfg.Server.Host)
+	}
+	if cfg.Server.Port != 8080 {
+		t.Errorf("expected port=8080, got %d", cfg.Server.Port)
+	}
+	if cfg.Server.Log == nil || *cfg.Server.Log {
+		t.Errorf("expected log=false, got %v", cfg.Server.Log)
+	}
+	if cfg.Fallback != "404" {
+		t.Errorf("expected fallback=404, got %q", cfg.Fallback)
+	}
+	// globals
+	if cfg.Globals["apiVersion"] != "v1" {
+		t.Errorf("expected globals.apiVersion=v1")
+	}
+	// routes[0]: 单字符串 method 标准化
+	if len(cfg.Routes[0].Method) != 1 || cfg.Routes[0].Method[0] != "GET" {
+		t.Errorf("expected GET, got %v", cfg.Routes[0].Method)
+	}
+	// routes[1]: 数组 method 保持顺序
+	if len(cfg.Routes[1].Method) != 2 || cfg.Routes[1].Method[0] != "GET" || cfg.Routes[1].Method[1] != "HEAD" {
+		t.Errorf("expected [GET,HEAD], got %v", cfg.Routes[1].Method)
+	}
+	// routes[2]: proxy 字段被解析为强类型
+	if cfg.Routes[2].Proxy == nil {
+		t.Fatalf("expected proxy non-nil")
+	}
+	if cfg.Routes[2].Proxy.Target != "http://upstream.local:8080" {
+		t.Errorf("expected target=http://upstream.local:8080, got %q", cfg.Routes[2].Proxy.Target)
+	}
+	if cfg.Routes[2].Proxy.Timeout != "10s" {
+		t.Errorf("expected timeout=10s, got %q", cfg.Routes[2].Proxy.Timeout)
+	}
+	// SourcePaths 包含加载文件
+	if len(cfg.SourcePaths) != 1 {
+		t.Errorf("expected 1 source path, got %d", len(cfg.SourcePaths))
+	}
+}
+
+func TestLoad_FileNotFound(t *testing.T) {
+	_, err := Load([]string{"testdata/does-not-exist.json5"}, "", nil)
+	if err == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
