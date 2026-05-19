@@ -43,7 +43,7 @@
 
 ### Phase 1 — 项目骨架 + 零配置 echo（✅ 已完成）
 
-**详细计划**：`phase1-skeleton.md`
+**详细计划**：[phase1-skeleton.md](2026-05-19-fakeserver-v0.1-phase1-skeleton.md)
 
 **目标**：让 `fakeserver serve` 能跑起来——零配置时充当 httpbin 风格 echo server。
 
@@ -81,7 +81,7 @@
 
 ### Phase 2 — 配置加载 + 路由摘要
 
-**详细计划**：`phase2-config.md`（待生成）
+**详细计划**：[phase2-config.md](2026-05-19-fakeserver-v0.1-phase2-config.md)
 
 **目标**：让 `fakeserver serve -c <paths>` 能加载并校验 JSON5 配置、解析 `@include`、合并多文件，并在启动时打印**路由摘要**（但**还不响应**配置中的 mock 请求——那是 Phase 3 的事）。
 
