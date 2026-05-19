@@ -19,6 +19,7 @@ func Run(version string) {
 	app.Add(newServeCmd())
 	app.Add(newInitCmd())
 	app.Add(newCheckCmd())
+	app.Add(newRoutesCmd())
 	// 未来子命令在此追加：
 	//   app.Add(newInitCmd())   // Phase 2
 	//   app.Add(newCheckCmd())  // Phase 2
