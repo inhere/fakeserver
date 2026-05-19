@@ -1,0 +1,4 @@
+{ routes: [
+  { method: "GET", path: "/users", body: "first" },
+  { method: "GET", path: "/users", body: "second" },
+] }
