@@ -1,0 +1,8 @@
+{
+  server: { port: 9000 },
+  globals: { apiVersion: "v2", extra: "added" },
+  fallback: "404",
+  routes: [
+    { method: "GET", path: "/override-only", body: "override" },
+  ],
+}

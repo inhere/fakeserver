@@ -193,3 +193,71 @@ func TestLoad_Include_RejectsUnsupportedExtension(t *testing.T) {
 		t.Fatal("expected unsupported-extension error")
 	}
 }
+
+func TestLoad_MultiFile_Merge(t *testing.T) {
+	cfg, err := Load(
+		[]string{"testdata/merge/base.json5", "testdata/merge/override.json5"},
+		"", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// server: 后者覆盖前者；未在 override 中的字段保留 base
+	if cfg.Server.Port != 9000 {
+		t.Errorf("expected port 9000 (override), got %d", cfg.Server.Port)
+	}
+	if cfg.Server.Host != "0.0.0.0" {
+		t.Errorf("expected host 0.0.0.0 (base preserved), got %q", cfg.Server.Host)
+	}
+	// globals: deep merge
+	if cfg.Globals["apiVersion"] != "v2" {
+		t.Errorf("expected apiVersion=v2 (override), got %v", cfg.Globals["apiVersion"])
+	}
+	if cfg.Globals["extra"] != "added" {
+		t.Errorf("expected globals.extra=added")
+	}
+	// fallback: 后者覆盖
+	if cfg.Fallback != "404" {
+		t.Errorf("expected fallback=404 (override), got %q", cfg.Fallback)
+	}
+	// routes: append in order
+	if len(cfg.Routes) != 2 {
+		t.Fatalf("expected 2 routes (1 base + 1 override), got %d", len(cfg.Routes))
+	}
+	if cfg.Routes[0].Path != "/base-only" {
+		t.Errorf("expected routes[0].path=/base-only, got %q", cfg.Routes[0].Path)
+	}
+	if cfg.Routes[1].Path != "/override-only" {
+		t.Errorf("expected routes[1].path=/override-only, got %q", cfg.Routes[1].Path)
+	}
+}
+
+func TestLoadDefault_PicksFirstExistingCandidate(t *testing.T) {
+	tmpDir := t.TempDir()
+	// 在 tmpDir 下放第二档候选 (fakeserver.json)，第一档 (fakeserver.json5) 故意不放
+	target := filepath.Join(tmpDir, "fakeserver.json")
+	if err := os.WriteFile(target, []byte(`{"routes":[{"method":"GET","path":"/x","body":"x"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadDefault(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil cfg")
+	}
+	if len(cfg.Routes) != 1 || cfg.Routes[0].Path != "/x" {
+		t.Errorf("expected single route /x, got %+v", cfg.Routes)
+	}
+}
+
+func TestLoadDefault_NoneExistReturnsNilNilNoError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg, err := LoadDefault(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error when no defaults exist: %v", err)
+	}
+	if cfg != nil {
+		t.Errorf("expected nil cfg (echo-only fallback), got %+v", cfg)
+	}
+}

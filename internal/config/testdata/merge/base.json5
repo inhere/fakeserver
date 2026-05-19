@@ -1,0 +1,7 @@
+{
+  server: { port: 3000, host: "0.0.0.0" },
+  globals: { apiVersion: "v1" },
+  routes: [
+    { method: "GET", path: "/base-only", body: "base" },
+  ],
+}

@@ -325,3 +325,17 @@ func cyclePath(visiting map[string]bool, dup string) string {
 	keys = append(keys, dup)
 	return strings.Join(keys, " → ")
 }
+
+// LoadDefault searches cwd for the conventional config files (see
+// DefaultPaths) and loads the first one that exists. Returns (nil, nil)
+// — not an error — when none exist, so the caller (cli/serve.go) can
+// degrade to echo-only mode silently.
+func LoadDefault(cwd string) (*Config, error) {
+	for _, rel := range DefaultPaths() {
+		abs := filepath.Join(cwd, rel)
+		if _, err := os.Stat(abs); err == nil {
+			return Load([]string{abs}, "", nil)
+		}
+	}
+	return nil, nil
+}
