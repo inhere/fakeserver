@@ -33,3 +33,46 @@ func TestStdlibHTMLTemplate_EscapesQuotesInText(t *testing.T) {
 		t.Errorf("expected text/template to NOT escape; got %q", buf.String())
 	}
 }
+
+func TestTextRenderer_NoHTMLEscape(t *testing.T) {
+	r := NewRenderer(nil, nil, 0)
+	out, err := r.Render(`{"name":"{{ .Request.Method }}"}`, &RenderCtx{Request: RequestCtx{Method: "POST"}})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if out != `{"name":"POST"}` {
+		t.Errorf("text renderer should not escape; got %q", out)
+	}
+}
+
+func TestTextRenderer_FuncsAvailable(t *testing.T) {
+	r := NewRenderer(nil, nil, 0)
+	out, err := r.Render(`{{ upper "abc" }}-{{ uuid | len }}`, &RenderCtx{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.HasPrefix(out, "ABC-36") {
+		t.Errorf("expected ABC-36..., got %q", out)
+	}
+}
+
+func TestHTMLRenderer_EscapesQuotes(t *testing.T) {
+	r := NewHTMLRenderer(nil, nil, 0)
+	out, err := r.Render(`<p>{{ .Request.Path }}</p>`, &RenderCtx{Request: RequestCtx{Path: `<script>`}})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if strings.Contains(out, "<script>") {
+		t.Errorf("html renderer should escape; got %q", out)
+	}
+}
+
+func TestRenderer_FakerSeedReproducible(t *testing.T) {
+	r := NewRenderer(nil, nil, 12345)
+	out1, _ := r.Render(`{{ fakeName }}`, &RenderCtx{})
+	r = NewRenderer(nil, nil, 12345)
+	out2, _ := r.Render(`{{ fakeName }}`, &RenderCtx{})
+	if out1 != out2 {
+		t.Errorf("with same seed: got %q vs %q", out1, out2)
+	}
+}
