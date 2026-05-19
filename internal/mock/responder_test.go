@@ -89,8 +89,8 @@ func TestRespond_TemplateRendersParams(t *testing.T) {
 		Method: []string{"GET"},
 		Path:   "/u/{id}",
 		Body: map[string]any{
-			"id":   "{{ .Request.Params.id }}",
-			"echo": "{{ .Request.Method }}",
+			"id":   "{{ .request.params.id }}",
+			"echo": "{{ .request.method }}",
 		},
 	}
 	ts := newRespondServer(t, "GET", "/u/{id}", route, r)

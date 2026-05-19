@@ -10,8 +10,13 @@ import (
 	"time"
 )
 
-// RenderCtx is the root data object passed to text/html template execution.
-// Field structure mirrors design §4.1.
+// RenderCtx 与 RequestCtx 保留作为 design §4.1 的"类型契约说明"——它们
+// 仅供文档参考，**实际运行期使用 map[string]any**（键名为字段的 json
+// tag / lowercase），以便 Go text/template 的反射能匹配 design §4.1 全
+// 小写字段访问（如 `{{ .request.params.id }}`）。
+//
+// Phase 3 后续阶段如需类型断言可基于本结构，但 BuildRenderCtx 不会再
+// 返回这两个 struct。
 type RenderCtx struct {
 	Request RequestCtx     // .request
 	Now     time.Time      // .now
@@ -34,15 +39,21 @@ type RequestCtx struct {
 	BodyRaw string
 }
 
-// BuildRenderCtx constructs a *RenderCtx for a single request. params come
-// from the router (rux path params); globals is cfg.Globals (set once at
-// load time). Body is parsed lazily based on Content-Type:
-//   application/json (or */+json) → map or slice
-//   application/x-www-form-urlencoded → map[string]any (multi-value → []string)
-//   text/* → string
-//   other / empty → original bytes as string
+// BuildRenderCtx constructs the template-execution data object for a single
+// request. Returns map[string]any with all keys lowercased so design §4.1
+// access patterns like {{ .request.params.id }} / {{ .now }} / {{ .config.x }}
+// work with Go text/template's reflection-based field access.
+//
+// params come from the router (rux path params); globals is cfg.Globals
+// (set once at load time). Body is parsed lazily based on Content-Type:
+//
+//	application/json (or */+json) → map or slice
+//	application/x-www-form-urlencoded → map[string]any (multi-value → []string)
+//	text/* → string
+//	other / empty → original bytes as string
+//
 // On parse failure for json/form, body falls back to string.
-func BuildRenderCtx(req *http.Request, params map[string]string, globals map[string]any) *RenderCtx {
+func BuildRenderCtx(req *http.Request, params map[string]string, globals map[string]any) map[string]any {
 	bodyBytes, _ := io.ReadAll(req.Body)
 	_ = req.Body.Close()
 	bodyRaw := string(bodyBytes)
@@ -52,23 +63,23 @@ func BuildRenderCtx(req *http.Request, params map[string]string, globals map[str
 		params = map[string]string{}
 	}
 
-	return &RenderCtx{
-		Request: RequestCtx{
-			Method:  req.Method,
-			Path:    req.URL.Path,
-			Proto:   req.Proto,
-			Host:    req.Host,
-			IP:      clientIP(req),
-			Params:  params,
-			Query:   flattenQuery(req.URL.Query()),
-			Headers: flattenHeaders(req.Header),
-			Body:    body,
-			BodyRaw: bodyRaw,
+	return map[string]any{
+		"request": map[string]any{
+			"method":  req.Method,
+			"path":    req.URL.Path,
+			"proto":   req.Proto,
+			"host":    req.Host,
+			"ip":      clientIP(req),
+			"params":  params,
+			"query":   flattenQuery(req.URL.Query()),
+			"headers": flattenHeaders(req.Header),
+			"body":    body,
+			"bodyRaw": bodyRaw,
 		},
-		Now:    time.Now(),
-		Env:    map[string]any{},
-		OSEnv:  map[string]string{},
-		Config: globals,
+		"now":    time.Now(),
+		"env":    map[string]any{},
+		"osenv":  map[string]string{},
+		"config": globals,
 	}
 }
 

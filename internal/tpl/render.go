@@ -16,8 +16,12 @@ import (
 // concrete implementations exist: textRenderer (text/template, default for
 // JSON / text responses) and htmlRenderer (html/template, only used when
 // the response Content-Type is text/html*).
+//
+// ctx is map[string]any with lowercase keys (see BuildRenderCtx) so design
+// §4.1 access patterns like {{ .request.params.id }} work via Go template
+// reflection.
 type Renderer interface {
-	Render(src string, ctx *RenderCtx) (string, error)
+	Render(src string, ctx map[string]any) (string, error)
 }
 
 // NewRenderer constructs the default (text-mode) renderer. Pass through
@@ -48,7 +52,7 @@ type textRenderer struct {
 	funcs texttpl.FuncMap
 }
 
-func (r *textRenderer) Render(src string, ctx *RenderCtx) (string, error) {
+func (r *textRenderer) Render(src string, ctx map[string]any) (string, error) {
 	tpl, err := texttpl.New("t").Funcs(r.funcs).Parse(src)
 	if err != nil {
 		return "", err
@@ -64,7 +68,7 @@ type htmlRenderer struct {
 	funcs htmltpl.FuncMap
 }
 
-func (r *htmlRenderer) Render(src string, ctx *RenderCtx) (string, error) {
+func (r *htmlRenderer) Render(src string, ctx map[string]any) (string, error) {
 	tpl, err := htmltpl.New("t").Funcs(r.funcs).Parse(src)
 	if err != nil {
 		return "", err

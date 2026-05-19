@@ -36,7 +36,10 @@ func TestStdlibHTMLTemplate_EscapesQuotesInText(t *testing.T) {
 
 func TestTextRenderer_NoHTMLEscape(t *testing.T) {
 	r := NewRenderer(nil, nil, 0)
-	out, err := r.Render(`{"name":"{{ .Request.Method }}"}`, &RenderCtx{Request: RequestCtx{Method: "POST"}})
+	ctx := map[string]any{
+		"request": map[string]any{"method": "POST"},
+	}
+	out, err := r.Render(`{"name":"{{ .request.method }}"}`, ctx)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -47,7 +50,7 @@ func TestTextRenderer_NoHTMLEscape(t *testing.T) {
 
 func TestTextRenderer_FuncsAvailable(t *testing.T) {
 	r := NewRenderer(nil, nil, 0)
-	out, err := r.Render(`{{ upper "abc" }}-{{ uuid | len }}`, &RenderCtx{})
+	out, err := r.Render(`{{ upper "abc" }}-{{ uuid | len }}`, map[string]any{})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -58,7 +61,10 @@ func TestTextRenderer_FuncsAvailable(t *testing.T) {
 
 func TestHTMLRenderer_EscapesQuotes(t *testing.T) {
 	r := NewHTMLRenderer(nil, nil, 0)
-	out, err := r.Render(`<p>{{ .Request.Path }}</p>`, &RenderCtx{Request: RequestCtx{Path: `<script>`}})
+	ctx := map[string]any{
+		"request": map[string]any{"path": `<script>`},
+	}
+	out, err := r.Render(`<p>{{ .request.path }}</p>`, ctx)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -69,9 +75,9 @@ func TestHTMLRenderer_EscapesQuotes(t *testing.T) {
 
 func TestRenderer_FakerSeedReproducible(t *testing.T) {
 	r := NewRenderer(nil, nil, 12345)
-	out1, _ := r.Render(`{{ fakeName }}`, &RenderCtx{})
+	out1, _ := r.Render(`{{ fakeName }}`, map[string]any{})
 	r = NewRenderer(nil, nil, 12345)
-	out2, _ := r.Render(`{{ fakeName }}`, &RenderCtx{})
+	out2, _ := r.Render(`{{ fakeName }}`, map[string]any{})
 	if out1 != out2 {
 		t.Errorf("with same seed: got %q vs %q", out1, out2)
 	}

@@ -112,7 +112,7 @@ func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer) {
 	}
 }
 
-func renderHeaders(hdrs map[string]string, r tpl.Renderer, ctx *tpl.RenderCtx) (map[string]string, error) {
+func renderHeaders(hdrs map[string]string, r tpl.Renderer, ctx map[string]any) (map[string]string, error) {
 	out := make(map[string]string, len(hdrs)+1)
 	for k, v := range hdrs {
 		rendered, err := r.Render(v, ctx)
@@ -128,7 +128,7 @@ func renderHeaders(hdrs map[string]string, r tpl.Renderer, ctx *tpl.RenderCtx) (
 // through the template renderer; maps and slices recurse; anything else
 // (numbers, bools, nil) passes through unchanged so json.Marshal preserves
 // the original type.
-func renderBody(body any, r tpl.Renderer, ctx *tpl.RenderCtx) (any, error) {
+func renderBody(body any, r tpl.Renderer, ctx map[string]any) (any, error) {
 	switch v := body.(type) {
 	case string:
 		return r.Render(v, ctx)

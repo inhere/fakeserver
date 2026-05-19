@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+// getRequest 从 map ctx 取出 .request 子 map（map-based 形态下的固定路径）。
+func getRequest(t *testing.T, ctx map[string]any) map[string]any {
+	t.Helper()
+	req, ok := ctx["request"].(map[string]any)
+	if !ok {
+		t.Fatalf("ctx.request not a map: %T", ctx["request"])
+	}
+	return req
+}
+
 func TestBuildRenderCtx_BasicFields(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://example.com:8080/api/x?a=1&b=2", strings.NewReader(""))
 	req.Header.Set("X-Custom", "yes")
@@ -13,23 +23,28 @@ func TestBuildRenderCtx_BasicFields(t *testing.T) {
 	req.RemoteAddr = "127.0.0.1:12345"
 
 	ctx := BuildRenderCtx(req, map[string]string{"id": "42"}, map[string]any{"apiVersion": "v1"})
-	if ctx.Request.Method != "POST" {
-		t.Errorf("method: got %q", ctx.Request.Method)
+	r := getRequest(t, ctx)
+	if r["method"] != "POST" {
+		t.Errorf("method: got %q", r["method"])
 	}
-	if ctx.Request.Path != "/api/x" {
-		t.Errorf("path: got %q", ctx.Request.Path)
+	if r["path"] != "/api/x" {
+		t.Errorf("path: got %q", r["path"])
 	}
-	if ctx.Request.Params["id"] != "42" {
-		t.Errorf("params.id: got %q", ctx.Request.Params["id"])
+	params := r["params"].(map[string]string)
+	if params["id"] != "42" {
+		t.Errorf("params.id: got %q", params["id"])
 	}
-	if ctx.Request.Query["a"] != "1" {
-		t.Errorf("query.a: got %v", ctx.Request.Query["a"])
+	query := r["query"].(map[string]any)
+	if query["a"] != "1" {
+		t.Errorf("query.a: got %v", query["a"])
 	}
-	if ctx.Request.Headers["X-Custom"] != "yes" {
-		t.Errorf("headers.X-Custom: got %q", ctx.Request.Headers["X-Custom"])
+	headers := r["headers"].(map[string]string)
+	if headers["X-Custom"] != "yes" {
+		t.Errorf("headers.X-Custom: got %q", headers["X-Custom"])
 	}
-	if ctx.Config["apiVersion"] != "v1" {
-		t.Errorf("config.apiVersion: got %v", ctx.Config["apiVersion"])
+	cfg := ctx["config"].(map[string]any)
+	if cfg["apiVersion"] != "v1" {
+		t.Errorf("config.apiVersion: got %v", cfg["apiVersion"])
 	}
 }
 
@@ -39,15 +54,16 @@ func TestBuildRenderCtx_JSONBodyParsed(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	ctx := BuildRenderCtx(req, nil, nil)
-	parsed, ok := ctx.Request.Body.(map[string]any)
+	r := getRequest(t, ctx)
+	parsed, ok := r["body"].(map[string]any)
 	if !ok {
-		t.Fatalf("body should be parsed as map; got %T = %v", ctx.Request.Body, ctx.Request.Body)
+		t.Fatalf("body should be parsed as map; got %T = %v", r["body"], r["body"])
 	}
 	if parsed["name"] != "alice" {
 		t.Errorf("name: %v", parsed["name"])
 	}
-	if ctx.Request.BodyRaw != body {
-		t.Errorf("BodyRaw: %q", ctx.Request.BodyRaw)
+	if r["bodyRaw"] != body {
+		t.Errorf("bodyRaw: %q", r["bodyRaw"])
 	}
 }
 
@@ -56,8 +72,9 @@ func TestBuildRenderCtx_TextBodyAsString(t *testing.T) {
 	req.Header.Set("Content-Type", "text/plain")
 
 	ctx := BuildRenderCtx(req, nil, nil)
-	if s, ok := ctx.Request.Body.(string); !ok || s != "hello world" {
-		t.Errorf("body: got %v (%T)", ctx.Request.Body, ctx.Request.Body)
+	r := getRequest(t, ctx)
+	if s, ok := r["body"].(string); !ok || s != "hello world" {
+		t.Errorf("body: got %v (%T)", r["body"], r["body"])
 	}
 }
 
@@ -67,9 +84,10 @@ func TestBuildRenderCtx_FormBody(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	ctx := BuildRenderCtx(req, nil, nil)
-	parsed, ok := ctx.Request.Body.(map[string]any)
+	r := getRequest(t, ctx)
+	parsed, ok := r["body"].(map[string]any)
 	if !ok {
-		t.Fatalf("form body should be parsed as map; got %T", ctx.Request.Body)
+		t.Fatalf("form body should be parsed as map; got %T", r["body"])
 	}
 	if parsed["name"] != "alice" {
 		t.Errorf("name: %v", parsed["name"])

@@ -52,7 +52,7 @@ func TestMount_ParamPathRendersFromTemplate(t *testing.T) {
 			{
 				Method: []string{"GET"},
 				Path:   "/u/{id}",
-				Body:   map[string]any{"id": "{{ .Request.Params.id }}"},
+				Body:   map[string]any{"id": "{{ .request.params.id }}"},
 			},
 		},
 	}
