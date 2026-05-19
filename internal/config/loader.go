@@ -15,7 +15,3 @@ package config
 func Load(paths []string, envName string, overrides map[string]string) (*Config, error) {
 	return nil, nil
 }
-
-// Config is forward-declared here so the stub compiles. The real definition
-// (with all fields) lands in schema.go in Task 2.
-type Config struct{}
