@@ -11,8 +11,10 @@ require (
 )
 
 require (
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gookit/cliui v0.2.3 // indirect
 	github.com/gookit/color v1.6.1 // indirect
+	github.com/gookit/easytpl v1.1.1 // indirect
 	github.com/gookit/filter v1.2.3 // indirect
 	github.com/gookit/validate v1.5.7 // indirect
 	github.com/monoculum/formam v3.5.5+incompatible // indirect

@@ -1,9 +1,14 @@
 package tpl
 
-// faker.go bridges gofakeit into the FuncMap. Task 4 fills in the real
-// registration; this stub keeps the package compilable and the import
-// referenced.
-
 import (
-	_ "github.com/brianvoe/gofakeit/v7"
+	"text/template"
+
+	_ "github.com/brianvoe/gofakeit/v7" // Task 4 fills in real bridging
 )
+
+// fakerFuncs is filled by Task 4 with ~20 fakeXxx functions plus the
+// generic `fake "<name>"`. For Task 3 we return an empty map so
+// BaseFuncMap compiles.
+func fakerFuncs() template.FuncMap {
+	return template.FuncMap{}
+}
