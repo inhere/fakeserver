@@ -2,12 +2,15 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/inhere/fakeserver/internal/config"
 )
 
 func TestServe_Healthz(t *testing.T) {
@@ -74,4 +77,23 @@ func TestServe_StatusEndpoint(t *testing.T) {
 	if resp.StatusCode != 503 {
 		t.Errorf("expected 503, got %d", resp.StatusCode)
 	}
+}
+
+func TestServe_ConfigLoadDoesNotRegisterMockRoutes(t *testing.T) {
+	cfg, err := config.Load(
+		[]string{"../config/testdata/valid/single-full.json5"},
+		"", nil)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	// 在 Phase 2，assembleRouter 与 cfg 无关——仅 admin + echo。
+	// 用 PrintRouteSummary 验证 cfg 含 mock 路由，但 router 不应注册。
+	var buf bytes.Buffer
+	PrintRouteSummary(cfg, &buf)
+	if !bytes.Contains(buf.Bytes(), []byte("/users/{id}")) {
+		t.Errorf("summary should list /users/{id}; got %s", buf.String())
+	}
+
+	// 路由 /users/42 当前请求会走 echo catch-all 而不是 cfg.Routes —— 这是 Phase 2 的合约。
+	// 真正的 mock 响应在 Phase 3 接入。这条测试只是把"不注册"事实显式化。
 }
