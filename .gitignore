@@ -1,0 +1,21 @@
+# 二进制
+/fakeserver
+/fakeserver.exe
+/dist/
+
+# 测试与构建产物
+*.test
+*.out
+/coverage.out
+
+# IDE
+/.idea/
+/.vscode/
+
+# 临时文件
+*.tmp
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
