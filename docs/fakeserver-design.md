@@ -10,6 +10,7 @@
 | 2026-05-19 | v0.1-draft | inhere | 初稿。覆盖 MVP 范围（核心 mock + 模板），WS/SSE 留 v2 |
 | 2026-05-19 | v0.2-draft | inhere | 补充：环境配置文件 / Proxy 路由 / 项目注册 / Web UI / Faker；MVP 纳入 faker + proxy；其余按 v0.2–v0.4 分期。`.env` 命名空间调整（文件 env），原 OS env 改名 `.osenv` |
 | 2026-05-19 | v0.3-draft | inhere | 复审补全：跨条目去重报错、OPTIONS 顺序、Content-Type 推断表、admin CORS 豁免、proxy 模板边界、默认配置查找、init 产物、bodyLimit 适用对象、cases 兜底、启动摘要样例、CLI 长格式、proxy 错误 route 字段、前台运行说明、字段顺序进未决项、静态目录服务进 v1.x |
+| 2026-05-19 | v0.3-phase1-applied | inhere | Phase 1 落地：项目骨架 + internal/cli + 极薄 cmd 入口 + echo（rux v2 MountEchoRoutes）+ admin /healthz + E2E。rux 实际为 v2.0.0（module path `github.com/gookit/rux/v2`），与原 design 假设接口名不同，详见 §13 已落地条目 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -31,7 +32,7 @@ fakeserver 是一个 **配置驱动的 HTTP Mock/Fake 服务器**，用于在前
 - **PRD**：见同目录 `../prd.md`
 - **设计讨论纪要**：本文档 § 2–§ 12 即为讨论结论的固化
 - **关键决策**：
-  - Web 框架使用 `github.com/gookit/rux`（PRD 指定）
+  - Web 框架使用 `github.com/gookit/rux/v2`（v2.0.0；module path 需显式带 `/v2` 后缀，否则会拉到 v1 分支）
   - 模板引擎使用 `github.com/gookit/easytpl`（讨论决定，复用其 `tplfunc.StdFuncMap` 基础函数）
   - 表达式求值使用 `github.com/expr-lang/expr`（轻量、活跃维护、替代已停维护的 govaluate）
   - JSON5 解析使用 `github.com/titanous/json5`
@@ -193,7 +194,7 @@ func (r *Ring) Subscribe() (<-chan Entry, func())
 
 | 用途 | 库 | 引入期 | 理由 |
 |---|---|---|---|
-| Web 框架 | `github.com/gookit/rux` | v0.1 | PRD 指定，内置 httpbin echo |
+| Web 框架 | `github.com/gookit/rux/v2` | v0.1 | PRD 指定，内置 httpbin echo；module path 显式带 `/v2`，避免拉到 v1 分支 |
 | 模板引擎 | `github.com/gookit/easytpl` | v0.1 | 用户指定；`tplfunc.StdFuncMap` 提供基础函数 |
 | CLI | `github.com/gookit/gcli/v3` | v0.1 | 与 lite-tools 同生态 |
 | JSON5 | `github.com/titanous/json5` | v0.1 | 用户指定 |
@@ -1189,6 +1190,18 @@ if seed == 0 {
 ---
 
 ## 13. 未决项 / 待评审
+
+### 已落地（Phase 1 阶段确认）
+
+- **rux 真实 module path**：`github.com/gookit/rux/v2`（v2.0.0）。原 design §1.2 / §2.4 / §5.5 描述中提到的"rux v2"在 Go module 系统中需要显式 `/v2` 后缀；`github.com/gookit/rux`（不带 `/v2`）会拉到 v1.4.1，是另一个仓库分支。
+- **rux/v2 server 子包真实 API**：Phase 1 实际接入的是 `server.MountEchoRoutes(r *rux.Router)`——一行调用即可挂上完整 httpbin 风格端点集（含 `/anything`、`/headers`、`/ip`、`/status/{code}`、`/delay/{seconds}`、`/uuid`、`/redirect/{n}`、`/cookies/*`、`/basic-auth/*`、`/bytes/{n}`、`/download/{filename}`、`/upload`，以及一个 HTML 首页 `/`）。design §5.5 原占位描述（"EchoNotFoundHandler / RegisterEchoEndpoints"）已过期，以本条为准；详见 `internal/echo/probe.md`。
+- **CLI 编排实际位置**：CLI app 构造、子命令注册、serve 子命令的 run handler 全部位于 `internal/cli/`（`app.go` / `serve.go` / `serve_test.go`）；`cmd/fakeserver/main.go` 仅作极薄入口（5 行非空代码：package + import + var version + func main 调用 `cli.Run(version)`）。后续 Phase 子命令（init/check/routes/list/use）都在 `internal/cli` 内追加一个 .go 文件，不再回到 cmd/。
+- **rux/v2 行为偏离 design 文档原假设**：
+  - `/ip` 端点返回字段名是 `origin`（不是 design 与 plan 假设的 `ip`）
+  - `/status/{非法 code}` fallback 到 200（不是 400）
+  - `MountEchoRoutes` 末尾注册了 `/*path` catch-all，事实上代替了 `r.NotFound(...)`——不需要再单独挂 NotFound handler
+
+### 待评审
 
 - rux v2 `server/` 子包导出符号的具体名称需在实现时核对（设计中以 "EchoHandlers / RegisterEchoEndpoints" 占位）
 - 退出 timeout（5s）、模板超时（2s）、热加载防抖（300ms）三个魔法数字是否需要做成配置项

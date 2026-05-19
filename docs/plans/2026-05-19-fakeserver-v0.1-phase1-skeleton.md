@@ -2,6 +2,8 @@
 
 > **执行说明**：本计划面向"对 fakeserver 仓库零上下文"的工程师。每步 2–5 分钟，TDD，频繁提交。复选框 `- [ ]` 用于跟踪执行进度。建议使用 `superpowers:subagent-driven-development` 或 `superpowers:executing-plans` 来逐任务执行。
 
+> **v0.3-phase1-applied 备注（2026-05-19）**：Phase 1 已落地执行。实际接入的是 `github.com/gookit/rux/v2`（v2.0.0），而非 plan 中假设的 `github.com/gookit/rux`（v1 分支）；echo 实际通过 `server.MountEchoRoutes(r)` 一行接入（plan Task 4 模板中的 `EchoNotFoundHandler` / `RegisterEchoEndpoints` 等占位符号在 v2 中不存在）。详见 `docs/fakeserver-design.md` §13 "已落地" 条目与 `internal/echo/probe.md`。下面 plan 主体保留原始内容作为历史参考；以 design 文档与现有代码为 source of truth。
+
 **Goal**：让 `fakeserver serve` 能跑起来——零配置时充当 httpbin 风格 echo server（默认端口 3000），并提供 `/__fakeserver/healthz` 健康检查端点。
 
 **Architecture**：`cmd/fakeserver/main.go` 仅作为极薄入口，所有 CLI 编排逻辑（app 构造、子命令注册、Run handler）在 `internal/cli/` 中，便于未来扩展子命令与单元测试；`gookit/rux` 作为 HTTP server，echo 端点直接复用 `gookit/rux` v2 内置的 `server/` 子包导出 handler，外加一层薄适配避免下游改动跟随 rux 版本漂移；admin 端点单独成包。
