@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -122,5 +124,72 @@ func TestLoad_FileNotFound(t *testing.T) {
 	_, err := Load([]string{"testdata/does-not-exist.json5"}, "", nil)
 	if err == nil {
 		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestLoad_Include_FlattensRoutesArray(t *testing.T) {
+	cfg, err := Load([]string{"testdata/include/root.json5"}, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 期望：inline 1 + users.json5 数组 2 + admin/*.json5 两个文件各 1 = 5
+	if len(cfg.Routes) != 5 {
+		t.Fatalf("expected 5 routes, got %d", len(cfg.Routes))
+	}
+	wantPaths := map[string]bool{
+		"/inline":        true,
+		"/users":         true,
+		"/users/{id}":    true,
+		"/admin/orders":  true,
+		"/admin/reports": true,
+	}
+	for _, r := range cfg.Routes {
+		if !wantPaths[r.Path] {
+			t.Errorf("unexpected route path %q", r.Path)
+		}
+	}
+}
+
+func TestLoad_Include_DetectsCycle(t *testing.T) {
+	_, err := Load([]string{"testdata/include/cycle/a.json5"}, "", nil)
+	if err == nil {
+		t.Fatal("expected cycle error, got nil")
+	}
+	if !strings.Contains(err.Error(), "cycle") && !strings.Contains(err.Error(), "circular") {
+		t.Errorf("expected error to mention cycle/circular, got %v", err)
+	}
+}
+
+func TestLoad_Include_NestedExpansion(t *testing.T) {
+	cfg, err := Load([]string{"testdata/include/nested/root.json5"}, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Routes) != 2 {
+		t.Fatalf("expected 2 routes (l1+l2), got %d", len(cfg.Routes))
+	}
+}
+
+func TestLoad_Include_GlobNoMatchErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	rootPath := filepath.Join(tmpDir, "root.json5")
+	if err := os.WriteFile(rootPath, []byte(`{ routes: ["@nope/*.json5"] }`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load([]string{rootPath}, "", nil)
+	if err == nil {
+		t.Fatal("expected glob-no-match error")
+	}
+}
+
+func TestLoad_Include_RejectsUnsupportedExtension(t *testing.T) {
+	tmpDir := t.TempDir()
+	rootPath := filepath.Join(tmpDir, "root.json5")
+	if err := os.WriteFile(rootPath, []byte(`{ routes: ["@foo.txt"] }`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load([]string{rootPath}, "", nil)
+	if err == nil {
+		t.Fatal("expected unsupported-extension error")
 	}
 }

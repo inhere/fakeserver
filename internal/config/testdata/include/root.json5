@@ -1,0 +1,7 @@
+{
+  routes: [
+    { method: "GET", path: "/inline", body: "inline" },
+    "@routes/users.json5",
+    "@routes/admin/*.json5",
+  ],
+}

@@ -44,8 +44,20 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 		if err != nil {
 			return nil, err
 		}
-		// Phase 2 Task 4 will expand @include here.
-		raws = append(raws, raw)
+		rawMap, ok := raw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("config %q: root must be an object", abs)
+		}
+		visiting := map[string]bool{abs: true}
+		expanded, err := expandIncludes(any(rawMap), filepath.Dir(abs), visiting)
+		if err != nil {
+			return nil, err
+		}
+		expandedMap, ok := expanded.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("config %q: root must be an object", abs)
+		}
+		raws = append(raws, expandedMap)
 		absSources = append(absSources, abs)
 	}
 
@@ -60,18 +72,17 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 	return cfg, nil
 }
 
-// loadFile reads a single file and parses it as JSON5 into a map.
-func loadFile(absPath string) (map[string]any, error) {
+// loadFile reads a single file and parses it as JSON5. For root-level configs
+// (called from Load), we expect a map. For included files, any JSON5 value
+// is acceptable (map, array, or scalar). The caller distinguishes via context.
+func loadFile(absPath string) (any, error) {
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("read %q: %w", absPath, err)
 	}
-	var out map[string]any
+	var out any
 	if err := json5.NewDecoder(strings.NewReader(string(data))).Decode(&out); err != nil {
 		return nil, fmt.Errorf("parse %q: %w", absPath, err)
-	}
-	if out == nil {
-		out = map[string]any{}
 	}
 	return out, nil
 }
@@ -166,4 +177,151 @@ func mapToConfig(m map[string]any) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal to Config: %w", err)
 	}
 	return cfg, nil
+}
+
+// expandIncludes walks the JSON5-decoded map, replacing any string value
+// starting with "@" (literal) with the JSON5 content from the referenced
+// file. Behavior per design §3.3:
+//   - Path resolution is relative to the including file's directory
+//   - Globs ("*", "**") are expanded; zero matches is an error
+//   - Recursion is allowed; cycles are detected via the visiting set
+//   - Only .json/.json5 extensions are accepted
+//   - "\@..." escapes a literal leading "@"
+//
+// In Phase 2 the only call site that interprets include results
+// structurally is the top-level routes array — strings appearing
+// elsewhere are still expanded (per design §3.3 second row) but the
+// resulting value replaces the string in place.
+//
+// visiting holds the absolute paths currently on the recursion stack so
+// we can detect cycles before re-reading the same file.
+func expandIncludes(node any, baseDir string, visiting map[string]bool) (any, error) {
+	switch v := node.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, child := range v {
+			expanded, err := expandIncludes(child, baseDir, visiting)
+			if err != nil {
+				return nil, err
+			}
+			out[k] = expanded
+		}
+		return out, nil
+	case []any:
+		out := make([]any, 0, len(v))
+		for _, item := range v {
+			expanded, err := expandIncludes(item, baseDir, visiting)
+			if err != nil {
+				return nil, err
+			}
+			// If a string @include resolved to a slice (e.g. a routes
+			// array), flatten it into the parent slice.
+			if subSlice, ok := expanded.([]any); ok && isIncludeString(item) {
+				out = append(out, subSlice...)
+			} else {
+				out = append(out, expanded)
+			}
+		}
+		return out, nil
+	case string:
+		if !strings.HasPrefix(v, "@") {
+			return v, nil
+		}
+		if strings.HasPrefix(v, "\\@") {
+			return v[1:], nil // unescape literal leading @
+		}
+		target := v[1:]
+		return resolveInclude(target, baseDir, visiting)
+	default:
+		return v, nil
+	}
+}
+
+// isIncludeString reports whether the original node is a "@..." reference
+// (not a literal). Used so a slice include can flatten into its parent.
+func isIncludeString(node any) bool {
+	s, ok := node.(string)
+	if !ok {
+		return false
+	}
+	return strings.HasPrefix(s, "@") && !strings.HasPrefix(s, "\\@")
+}
+
+// resolveInclude reads and recursively expands the file (or glob) named
+// by spec, relative to baseDir.
+func resolveInclude(spec, baseDir string, visiting map[string]bool) (any, error) {
+	// Resolve absolute target(s)
+	absSpec := spec
+	if !filepath.IsAbs(absSpec) {
+		absSpec = filepath.Join(baseDir, spec)
+	}
+
+	var matches []string
+	if strings.ContainsAny(absSpec, "*?[") {
+		m, err := filepath.Glob(absSpec)
+		if err != nil {
+			return nil, fmt.Errorf("@include glob %q: %w", spec, err)
+		}
+		if len(m) == 0 {
+			return nil, fmt.Errorf("@include %q: no files matched", spec)
+		}
+		matches = m
+	} else {
+		matches = []string{absSpec}
+	}
+
+	var results []any
+	for _, p := range matches {
+		ext := strings.ToLower(filepath.Ext(p))
+		if ext != ".json" && ext != ".json5" {
+			return nil, fmt.Errorf("@include %q: unsupported extension %q (only .json/.json5)", p, ext)
+		}
+		if visiting[p] {
+			return nil, fmt.Errorf("@include cycle detected: %s", cyclePath(visiting, p))
+		}
+		raw, err := loadFile(p)
+		if err != nil {
+			return nil, err
+		}
+
+		// Recurse into the loaded content
+		visiting[p] = true
+		expanded, err := expandIncludes(any(raw), filepath.Dir(p), visiting)
+		delete(visiting, p)
+		if err != nil {
+			return nil, err
+		}
+
+		// The included file's root may be a route object (map), a slice
+		// of routes, or a top-level config map. Convert to "any" and
+		// append.
+		results = append(results, expanded)
+	}
+
+	// Single match? Return the single result so the caller can decide
+	// whether to flatten. Multiple matches always flatten as a slice.
+	if len(results) == 1 {
+		return results[0], nil
+	}
+	// Multiple matches: convert each to its inner shape and flatten
+	flat := make([]any, 0, len(results))
+	for _, r := range results {
+		if slice, ok := r.([]any); ok {
+			flat = append(flat, slice...)
+		} else {
+			flat = append(flat, r)
+		}
+	}
+	return flat, nil
+}
+
+// cyclePath formats the visiting set into a "a → b → c → a" chain for
+// error messages.
+func cyclePath(visiting map[string]bool, dup string) string {
+	keys := make([]string, 0, len(visiting)+1)
+	for k := range visiting {
+		keys = append(keys, k)
+	}
+	keys = append(keys, dup)
+	return strings.Join(keys, " → ")
 }

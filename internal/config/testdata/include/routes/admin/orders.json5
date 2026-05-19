@@ -1,0 +1,1 @@
+{ method: "GET", path: "/admin/orders", body: { count: 0 } }

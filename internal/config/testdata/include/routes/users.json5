@@ -1,0 +1,4 @@
+[
+  { method: "GET", path: "/users", body: { items: [] } },
+  { method: "GET", path: "/users/{id}", body: { id: "x" } },
+]
