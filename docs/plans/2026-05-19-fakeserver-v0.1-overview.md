@@ -29,7 +29,7 @@
 |---|---|---|---|---|---|---|
 | **1** | 项目骨架 + 零配置 echo | `cmd/fakeserver/`、`internal/cli/`、`internal/echo/`、`internal/admin/` + `serve` 子命令 | rux/v2、gcli/v3、goutil | — | ~400 行 | ✅ 已完成 |
 | **2** | 配置加载 + 路由摘要 | `internal/config/`、`internal/cli/{init,check,routes}.go` | titanous/json5 | Phase 1 | ~800 行 | ✅ 已完成 (commit 4182891..b316e98) |
-| **3** | 模板与单一响应 mock | `internal/tpl/`（含 faker）、`internal/mock/{router,responder}.go` | easytpl、gofakeit | Phase 2 | ~900 行 | 待开始 |
+| **3** | 模板与单一响应 mock | `internal/tpl/`（含 faker）、`internal/mock/{router,responder}.go` | easytpl、gofakeit | Phase 2 | ~900 行 | ✅ 已完成 (commit 37839c8..fc089dc) |
 | **4** | 多响应 + 条件分支 + bodyFile + proxy | `internal/mock/{selector,matcher}.go`、`internal/proxy/` | expr-lang/expr | Phase 3 | ~600 行 | 待开始 |
 | **5** | 运行时与可观测性 | `internal/middleware/`、`internal/config/watcher.go`、admin `/routes` | fsnotify | Phase 4 | ~500 行 | 待开始 |
 
@@ -167,6 +167,19 @@
 7. `go test ./...` 通过；`internal/{tpl,mock}` 单元测试覆盖率 ≥ 80%
 
 **对 design 章节的映射**：§4 全章（上下文 / 函数 / 双渲染器 / 渲染顺序）、§12 Faker、§3.2 单一响应字段（不含 cases/proxy）、§7 测试策略 `internal/{tpl,mock}/*_test.go` 段。
+
+**实际落地偏差**：
+
+- `tplfunc.StdFuncMap` 实际包含 ~110 个函数（Task 1 探查发现），远超 design §4.2 假设的"少数基础函数 + TODO"。但 BaseFuncMap 的合并顺序（先 copy tplfunc，再 copy fakeserver 自有覆盖）保证 §4.3 列出的语义在我们自己手里
+- `gofakeit/v7` 实际 API：`Seed(int64)`（不是 plan 假设的 uint64）；`Generate(s string) (string, error)` 返回**二元组**（plan 假设单字符串返回）；`GetFuncs` **不存在**——通用 `fake "<name>"` 入口用 `Generate("{<name>}")` 实现。`Sentence/Paragraph` 在 v7 改为 variadic 参数，调用时不传参用默认值
+- `rux v2 Context.Params` 是**方法**返回 `*Params` 而非字段；内部 `data [16]Param + n uint8` 全私有；**无 AddParam**。遍历用 `c.Params().Snapshot() []Param`。这迫使 mock 测试**不能**手动构造 *rux.Context，改用 `httptest.NewServer + rux.New() + Mount` 走真实路由匹配——结果反而更稳健（测试覆盖生产路径，不依赖 stub）
+- `rux v2 responseWriter` 缓存 `WriteHeader` 状态码到首次 `Write` 才下发；零 body 响应需 `Write(nil)` 触发——已在 `Respond` 末尾处理
+- 本 Phase 不调用 `easytpl.Renderer`，仅复用其 `tplfunc.StdFuncMap()` 作为基础函数集。easytpl 的 layout/partial 能力 v0.1 用不上，留待未来
+- **DoD 覆盖率未达 80% 阈值**：`internal/tpl` 实测 64.1%、`internal/mock` 实测 69.3%。低于 plan 的 DoD #7（≥ 80%）。主要缺口：`tpl.faker` 的 gofakeit 大量 fakeXxx wrapper（每个 1 行包装），以及 `mock.responder` 的错误分支（模板渲染失败 500、bodyFile 不存在 500）未在单测中覆盖。功能覆盖度 OK（核心路径有用例），统计学覆盖率被未走的错误分支与一行包装拉低。补足留 Phase 4 一并处理（issue 已记录）
+- **冒烟测试发现 fixture 与 RenderCtx 字段映射不匹配**：`internal/config/testdata/valid/single-full.json5` 中模板写 `{{ .request.params.id }}` 小写字段，但 Go `text/template` 默认按 `RenderCtx.Request`（大写）反射查找，导致 `/users/42` 实际返回 500（template error）。这是 fixture 编写假设与实现选型不一致（design 表意为小写，但实现采用 stdlib 默认大写字段反射）。修复方案有二（改 fixture 用大写、或 RenderCtx 改用 map 表达）；本 Task 范围只动 docs 故不修，issue 已记录留作 Phase 4 收尾时一并处理。**生产路径 `/ping`（无模板）与 `/unknown`（echo 兜底）冒烟均通过 200**
+- 其余实现与 plan 一致
+
+**Phase 3 测试覆盖**：42 个用例（tpl 32 + mock 10）；`internal/tpl` 覆盖率 64.1%；`internal/mock` 覆盖率 69.3%（均低于 DoD ≥ 80% 阈值，已在偏差段说明）
 
 ---
 

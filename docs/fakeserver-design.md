@@ -12,6 +12,7 @@
 | 2026-05-19 | v0.3-draft | inhere | 复审补全：跨条目去重报错、OPTIONS 顺序、Content-Type 推断表、admin CORS 豁免、proxy 模板边界、默认配置查找、init 产物、bodyLimit 适用对象、cases 兜底、启动摘要样例、CLI 长格式、proxy 错误 route 字段、前台运行说明、字段顺序进未决项、静态目录服务进 v1.x |
 | 2026-05-19 | v0.3-phase1-applied | inhere | Phase 1 落地：项目骨架 + internal/cli + 极薄 cmd 入口 + echo（rux v2 MountEchoRoutes）+ admin /healthz + E2E。rux 实际为 v2.0.0（module path `github.com/gookit/rux/v2`），与原 design 假设接口名不同，详见 §13 已落地条目 |
 | 2026-05-19 | v0.3-phase2-applied | inhere | Phase 2 落地：internal/config 包（schema/loader/include/merge/defaults/validate）+ cli init/check/routes + serve 接入 -c。mock 路由仅打印摘要，实际响应留 Phase 3 |
+| 2026-05-19 | v0.3-phase3-applied | inhere | Phase 3 落地：internal/tpl（含 22+ 自有函数 + gofakeit 桥接 + 双渲染器）+ internal/mock（router/responder）+ serve 接入。单一响应模式 mock 真正生效；cases/proxy 留 Phase 4 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1209,6 +1210,19 @@ if seed == 0 {
 - **schema 中的 `Log` 字段用指针 `*bool`**：因为零值无法区分"未设置"与"显式 false"；Phase 5 接入 logger 中间件时按 `Log == nil` 视为默认开
 - **Validate 范围**：Phase 2 校验所有非依赖 expr/template 的规则（互斥、必填、重复、保留前缀、enum 校验、bodyFile 存在性、proxy.target scheme）。`when` 表达式语法与 `body` 模板语法的校验留给 Phase 4/3 与对应库一并接入
 - **Phase 2 边界**：`fakeserver serve -c <path>` 启动时**打印**路由摘要但**不注册** mock 路由 handler；配置中的 path 在 Phase 3 接入前仍走 echo `/*path` 兜底
+
+### 已落地（Phase 3 阶段确认）
+
+- **tplfunc.StdFuncMap 实际清单**：~110 个函数，覆盖 string/math/list/encoding/path/hash/other 多个分类（含 randInt/uuid/md5/b64enc/fromJson/toJson/default/coalesce 等）。design §4.2 原描述"TODO + 少量基础"已过期；fakeserver 自有 22+ 函数仍全部实现，BaseFuncMap 中后注册覆盖
+- **gofakeit/v7 v7.15.0 实际 API**：
+  - `Seed(int64)` —— 不是 uint64
+  - `Generate(s string) (string, error)` —— 二元组返回，需 `out, _ := gofakeit.Generate(...)`
+  - `GetFuncs` 不存在 —— 通用 `fake "<name>"` 入口用 `Generate("{<name>}")` 实现
+  - `Sentence` / `Paragraph` 在 v7 为 variadic 参数，本 Phase 调用时不传参用默认行为
+- **rux v2 Context Params 形态**：`c.Params()` 是方法返回 `*core.Params`；内部 `data [16]Param + n uint8` 全私有；**无 AddParam**。公开遍历用 `Snapshot() []Param`、单 key 查询用 `Get(name)`、或 `c.Param(name)` 快捷方式
+- **rux v2 responseWriter 行为**：`WriteHeader(code)` 缓存状态码，到首次 `Write` 才真正发出。零 body 响应需 `Write(nil)` 触发 `ensureWriteHeader`——已在 `mock.Respond` 末尾处理
+- **easytpl 接入范围**：仅复用 `tplfunc.StdFuncMap()` 作为基础 FuncMap；**不**使用 easytpl.Renderer 的 layout/partial 能力。fakeserver 的 text/html 双渲染器直接基于 stdlib `text/template` + `html/template`
+- **Phase 3 边界**：mock router 跳过含 `cases` 或 `proxy` 字段的 route（Phase 4 处理）；未匹配请求仍走 echo `/*path` 兜底；模板里 `.env` Phase 3 为空 map（v0.2 才接 env 文件），`.osenv` 与 `osenv` 函数完整可用且受 osenvWhitelist 约束
 
 ### 待评审
 
