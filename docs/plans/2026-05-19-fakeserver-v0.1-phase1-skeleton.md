@@ -6,12 +6,12 @@
 
 **Architecture**：`cmd/fakeserver/main.go` 仅作为极薄入口，所有 CLI 编排逻辑（app 构造、子命令注册、Run handler）在 `internal/cli/` 中，便于未来扩展子命令与单元测试；`gookit/rux` 作为 HTTP server，echo 端点直接复用 `gookit/rux` v2 内置的 `server/` 子包导出 handler，外加一层薄适配避免下游改动跟随 rux 版本漂移；admin 端点单独成包。
 
-**Tech Stack**：Go 1.22+ · `github.com/gookit/rux` v2 · `github.com/gookit/gcli/v3` · `github.com/gookit/goutil` · 标准库 `net/http`/`net/http/httptest`/`os/signal`/`context`。
+**Tech Stack**：Go 1.25+ · `github.com/gookit/rux` v2 · `github.com/gookit/gcli/v3` · `github.com/gookit/goutil` · 标准库 `net/http`/`net/http/httptest`/`os/signal`/`context`。
 
 **前置要求**：
 
 - 已读过 `docs/fakeserver-design.md` §1（背景）、§2（架构）、§5（运行机制）章节
-- 已安装 Go 1.22+（验证：`go version`）
+- 已安装 Go 1.25+（验证：`go version`）
 - 当前工作目录就是 `fakeserver/`（本仓库 root；存在 `prd.md`、`docs/fakeserver-design.md`、独立 `.git`，**无** `go.mod`）
 
 **Phase 1 完成定义（DoD）**：
@@ -60,7 +60,7 @@
 go mod init github.com/inhere/fakeserver
 ```
 
-预期：生成 `go.mod`，内容首行 `module github.com/inhere/fakeserver`，第二行声明 Go 版本（如 `go 1.22`）。
+预期：生成 `go.mod`，内容首行 `module github.com/inhere/fakeserver`，第二行声明 Go 版本（如 `go 1.25`）。
 
 - [ ] **Step 1.2: 写 `.gitignore`**
 
