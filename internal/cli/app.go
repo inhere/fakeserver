@@ -17,6 +17,7 @@ func Run(version string) {
 		a.Desc = "Configurable HTTP mock/fake server"
 	})
 	app.Add(newServeCmd())
+	app.Add(newInitCmd())
 	// 未来子命令在此追加：
 	//   app.Add(newInitCmd())   // Phase 2
 	//   app.Add(newCheckCmd())  // Phase 2
