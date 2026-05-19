@@ -131,7 +131,7 @@
 
 ### Phase 3 — 模板与单一响应 mock
 
-**详细计划**：`phase3-template-mock.md`（待生成）
+**详细计划**：[phase3-template-mock.md](2026-05-19-fakeserver-v0.1-phase3-template-mock.md)
 
 **目标**：让 `fakeserver serve -c routes.json5` **真正响应** 配置里的 **单一响应模式** route（含模板渲染 + faker），同时支持 `bodyFile`。
 
