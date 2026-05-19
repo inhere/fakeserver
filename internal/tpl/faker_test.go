@@ -87,3 +87,58 @@ func TestFakerGenericInput(t *testing.T) {
 		t.Errorf("fake \"color\" returned empty")
 	}
 }
+
+// TestFakerGenericUnknownName 未识别 name 应回退到空串。
+func TestFakerGenericUnknownName(t *testing.T) {
+	out := renderInlineFaker(t, `{{ fake "definitely_not_a_gofakeit_name_xyz" }}`)
+	if out != "" {
+		t.Errorf("fake unknown name should be empty; got %q", out)
+	}
+}
+
+func TestFakerIPv6(t *testing.T) {
+	out := renderInlineFaker(t, `{{ fakeIPv6 }}`)
+	if out == "" {
+		t.Error("fakeIPv6 empty")
+	}
+}
+
+func TestFakerZip(t *testing.T) {
+	out := renderInlineFaker(t, `{{ fakeZip }}`)
+	if out == "" {
+		t.Error("fakeZip empty")
+	}
+}
+
+func TestFakerParagraph(t *testing.T) {
+	out := renderInlineFaker(t, `{{ fakeParagraph }}`)
+	if out == "" {
+		t.Error("fakeParagraph empty")
+	}
+}
+
+func TestFakerDate(t *testing.T) {
+	out := renderInlineFaker(t, `{{ (fakeDate).Format "2006" }}`)
+	if len(out) != 4 {
+		t.Errorf("fakeDate.Format year: got %q", out)
+	}
+}
+
+func TestFakerFloatRange(t *testing.T) {
+	out := renderInlineFaker(t, `{{ fakeFloatRange 1.0 10.0 }}`)
+	if out == "" {
+		t.Error("fakeFloatRange empty")
+	}
+	// max<min 边界 → 返回 min
+	out = renderInlineFaker(t, `{{ fakeFloatRange 10.0 1.0 }}`)
+	if out != "10" {
+		t.Errorf("fakeFloatRange max<min should return min; got %q", out)
+	}
+}
+
+func TestFakerIntRangeMaxLessThanMin(t *testing.T) {
+	out := renderInlineFaker(t, `{{ fakeIntRange 50 10 }}`)
+	if out != "50" {
+		t.Errorf("fakeIntRange max<min should return min; got %q", out)
+	}
+}
