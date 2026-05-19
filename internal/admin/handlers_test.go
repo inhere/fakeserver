@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gookit/rux"
+	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/admin"
 )

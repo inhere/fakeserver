@@ -1,56 +1,49 @@
-# rux/server 子包导出符号探测
+# rux/server 子包导出符号探测（v2 对齐版）
 
-rux 版本: v1.4.1
+rux 版本: v2.0.0（module path: `github.com/gookit/rux/v2`）
 探测日期: 2026-05-19
 
 ## 关心的符号
 
-- 处理 /anything 风格回显的 handler: NewEchoServer()
-- 注册批量端点的入口: NewEchoServer()
-- 函数签名（含参数/返回值）:
+- 处理 /anything 风格回显的 handler: `server.MountEchoRoutes(r *rux.Router)`（批量挂载，含 /anything）
+- 注册批量端点的入口: `server.MountEchoRoutes(r *rux.Router)`（一次性挂载完整 httpbin 端点集）
+- 函数签名:
+  ```go
+  func MountEchoRoutes(r *rux.Router)
+  func NewEchoServer() *Server   // 备用，会绑死整个 Server，本项目不用
   ```
-  func NewEchoServer() *Server
-  ```
 
-## 实现细节
+## v2 端点全集（由 MountEchoRoutes 注册）
 
-`NewEchoServer()` 返回一个预配置的 `*Server`（`Server` 是 `*rux.Router` 的包装），
-其中已注册了一条通配符路由：
-```go
-s.Any("/{all}", func(c *rux.Context) {
-    data := testutil.BuildEchoReply(c.Req)
-    c.Respond(200, data, render.NewJSONIndented())
-})
-```
-
-该路由的处理器使用 `github.com/gookit/goutil/testutil.BuildEchoReply()` 
-将 HTTP 请求自动转换为包含以下信息的 JSON 回显：
-- origin: 客户端 IP
-- url: 请求 URL
-- method: HTTP 方法
-- query: 查询参数（如有）
-- headers: 请求头（如有）
-- form: 表单数据（如有）
-- body: 原始请求体
-- json: JSON 体（Content-Type: application/json 时）
-- files: 上传文件（如有）
-
-返回 HTTP 200 和 JSON Indented 格式的数据。
+- `GET /`                           — HTML 首页索引
+- `ANY /anything`, `ANY /anything/*path` — 完整请求 JSON 回显
+- `ANY /get|/post|/put|/patch|/delete` — method-locked 端点（错方法返回 405）
+- `GET /headers`                    — 仅 headers
+- `GET /ip`                         — `{"origin": "<ip>"}`（注意：不是 `ip` 字段）
+- `GET /user-agent`                 — User-Agent
+- `ANY /status/{code}`              — 任意状态码；非法值 fallback 到 200
+- `GET /delay/{seconds}`            — sleep（cap 10s）
+- `GET /redirect/{n}`               — 倒数重定向
+- `GET /cookies`, `GET /cookies/set/{name}/{value}` — cookie 操作
+- `GET /basic-auth/{user}/{passwd}` — Basic Auth
+- `GET /bytes/{n}`                  — 随机字节
+- `GET /uuid`                       — UUID v4
+- `GET /download/{filename}`        — 合成下载
+- `POST /upload`                    — multipart 上传 echo
+- `ANY /*path`                      — 最后兜底（任何未匹配路径都会回显）
 
 ## 落地结论
 
-rux v1.4.1 **提供内置 echo handlers**（路径 A），不需自己实现通用 echo 回显。
+在 `internal/echo/mount.go` 中以一行调用接入：
 
-在 internal/echo/mount.go 中：
-1. 导入 `github.com/gookit/rux/server` 包
-2. 调用 `server.NewEchoServer()` 获得预配置 server
-3. 从该 server 提取 `*rux.Router`（因 `Server` 嵌入了 `*rux.Router`）
-4. 用该 router 作为基础继续注册其他需要的端点
-   - `/headers` GET → 可选（`NewEchoServer()` 的 /{all} 已回显 headers）
-   - `/ip` GET → 可选（`NewEchoServer()` 的 /{all} 已回显 origin）
-   - `/status/{code}` GET → 需自实现
-   - `/delay/{seconds}` GET → 需自实现
-   - `/__fakeserver/healthz` → admin 包负责
+```go
+func Mount(r *rux.Router) {
+    server.MountEchoRoutes(r)
+}
+```
 
-核心回显功能（/anything 及 headers/ip 信息）复用 rux/server 子包的 NewEchoServer()，
-额外路由（/status, /delay）在此基础上扩展。
+由于 v2 自带 `/*path` 兜底，**不需要** 调用 `r.NotFound(...)`——echo 的 catch-all 已覆盖任意 path。
+
+## 与 design §1.4 / §5.5 的偏差
+
+design 旧描述假设 rux v2 提供"散装 handler 可 NotFound 接入 + RegisterEchoEndpoints"。实际 v2 提供更优雅的 `MountEchoRoutes` 单点入口，且端点种类比 design 描述的更丰富（多了 /uuid /redirect /cookies/* /basic-auth/* /bytes/{n} /download /upload）。Task 9 会把这些事实回写到 design。

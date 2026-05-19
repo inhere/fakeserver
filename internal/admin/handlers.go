@@ -6,7 +6,7 @@ package admin
 import (
 	"net/http"
 
-	"github.com/gookit/rux"
+	"github.com/gookit/rux/v2"
 )
 
 // Mount 注册所有 admin 端点。调用方必须保证 path "/__fakeserver/*"
