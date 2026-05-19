@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/gookit/gcli/v3"
+	"github.com/gookit/goutil/errorx"
 
 	"github.com/inhere/fakeserver/internal/config"
 )
@@ -38,24 +39,24 @@ func newInitCmd() *gcli.Command {
 func runInit(opts initOptions) error {
 	target := filepath.Join(opts.cwd, "fakeserver.json5")
 	if _, err := os.Stat(target); err == nil {
-		return fmt.Errorf("init: %q already exists (refusing to overwrite; delete it first if intentional)", target)
+		return errorx.Failf(1, "init: %q already exists (refusing to overwrite; delete it first if intentional)", target)
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("init: stat %q: %w", target, err)
+		return errorx.Failf(1, "init: stat %q: %s", target, err.Error())
 	}
 	if err := os.WriteFile(target, []byte(initTemplate), 0o644); err != nil {
-		return fmt.Errorf("init: write %q: %w", target, err)
+		return errorx.Failf(1, "init: write %q: %s", target, err.Error())
 	}
 	fmt.Printf("created %s\n", target)
 
 	if opts.withEnv {
 		envTarget := filepath.Join(opts.cwd, "fakeserver.env.json5")
 		if _, err := os.Stat(envTarget); err == nil {
-			return fmt.Errorf("init --with-env: %q already exists (refusing to overwrite)", envTarget)
+			return errorx.Failf(1, "init --with-env: %q already exists (refusing to overwrite)", envTarget)
 		} else if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("init: stat %q: %w", envTarget, err)
+			return errorx.Failf(1, "init: stat %q: %s", envTarget, err.Error())
 		}
 		if err := os.WriteFile(envTarget, []byte(initEnvTemplate), 0o644); err != nil {
-			return fmt.Errorf("init: write %q: %w", envTarget, err)
+			return errorx.Failf(1, "init: write %q: %s", envTarget, err.Error())
 		}
 		fmt.Printf("created %s\n", envTarget)
 	}

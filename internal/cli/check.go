@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gookit/gcli/v3"
+	"github.com/gookit/goutil/errorx"
 
 	"github.com/inhere/fakeserver/internal/config"
 )
@@ -33,11 +34,11 @@ func newCheckCmd() *gcli.Command {
 
 func runCheck(opts checkOptions) error {
 	if len(opts.paths) == 0 {
-		return fmt.Errorf("check: at least one --config path is required")
+		return errorx.Failf(1, "check: at least one --config path is required")
 	}
 	cfg, err := config.Load(opts.paths, "", nil)
 	if err != nil {
-		return fmt.Errorf("check: %w", err)
+		return errorx.Failf(1, "check: %s", err.Error())
 	}
 	errs := config.Validate(cfg)
 	if len(errs) > 0 {
@@ -46,7 +47,7 @@ func runCheck(opts checkOptions) error {
 		for i, e := range errs {
 			sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, e.Error()))
 		}
-		return fmt.Errorf("%s", sb.String())
+		return errorx.Failf(1, "%s", sb.String())
 	}
 	fmt.Fprintf(opts.out, "OK: %d routes loaded\n", len(cfg.Routes))
 	return nil

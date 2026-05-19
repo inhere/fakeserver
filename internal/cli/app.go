@@ -5,6 +5,8 @@
 package cli
 
 import (
+	"os"
+
 	"github.com/gookit/gcli/v3"
 )
 
@@ -26,5 +28,6 @@ func Run(version string) {
 	//   app.Add(newRoutesCmd()) // Phase 2
 	//   app.Add(newListCmd())   // Phase 3
 	//   app.Add(newUseCmd())    // Phase 3
-	app.Run(nil)
+	code := app.Run(nil)
+	os.Exit(code)
 }

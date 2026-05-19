@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"fmt"
 	"io"
 	"os"
 
 	"github.com/gookit/gcli/v3"
+	"github.com/gookit/goutil/errorx"
 
 	"github.com/inhere/fakeserver/internal/config"
 )
@@ -34,14 +34,14 @@ func newRoutesCmd() *gcli.Command {
 
 func runRoutes(opts routesOptions) error {
 	if len(opts.paths) == 0 {
-		return fmt.Errorf("routes: at least one --config path is required")
+		return errorx.Failf(1, "routes: at least one --config path is required")
 	}
 	cfg, err := config.Load(opts.paths, "", nil)
 	if err != nil {
-		return fmt.Errorf("routes: %w", err)
+		return errorx.Failf(1, "routes: %s", err.Error())
 	}
 	if errs := config.Validate(cfg); len(errs) > 0 {
-		return fmt.Errorf("routes: config has %d validation error(s); run `fakeserver check` for details", len(errs))
+		return errorx.Failf(1, "routes: config has %d validation error(s); run `fakeserver check` for details", len(errs))
 	}
 	PrintRouteSummary(cfg, opts.out)
 	return nil
