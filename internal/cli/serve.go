@@ -16,6 +16,8 @@ import (
 	"github.com/inhere/fakeserver/internal/admin"
 	"github.com/inhere/fakeserver/internal/config"
 	"github.com/inhere/fakeserver/internal/echo"
+	"github.com/inhere/fakeserver/internal/mock"
+	"github.com/inhere/fakeserver/internal/tpl"
 )
 
 type serveOptions struct {
@@ -44,11 +46,15 @@ func newServeCmd() *gcli.Command {
 	return c
 }
 
-// assembleRouter is unchanged from Phase 1: admin + echo only.
-// Phase 3 will add mock-route registration here; Phase 4 adds proxy;
-// Phase 5 adds middleware.
-func assembleRouter() *rux.Router {
+// assembleRouter mounts mock routes (Phase 3+) first, then admin endpoints,
+// then echo as fallback. rux's radix tree (static > param > wildcard)
+// ensures specific user routes win over the echo /*path catch-all.
+//
+// cfg may be nil — in that case mock.Mount is a no-op and the server
+// behaves identically to Phase 1's zero-config mode.
+func assembleRouter(cfg *config.Config, renderer tpl.Renderer) *rux.Router {
 	r := rux.New()
+	_ = mock.Mount(r, cfg, renderer) // Phase 3: only single-response routes register
 	admin.Mount(r)
 	echo.Mount(r)
 	return r
@@ -96,8 +102,9 @@ func joinErrs(errs []error) string {
 // runServe assembles the router, optionally loads and prints config, then
 // runs the HTTP server with signal-driven graceful shutdown.
 //
-// Phase 2 caveat: cfg.Routes are PRINTED to stdout but NOT registered to
-// the router — actual mock response handling lands in Phase 3.
+// Phase 3: cfg.Routes are now REGISTERED to the router via mock.Mount;
+// each single-response route gets a dedicated HTTP handler. Renderer is
+// constructed from cfg (if present) and passed to assembleRouter.
 func runServe(opts serveOptions) error {
 	cfg, err := loadServeConfig(opts)
 	if err != nil {
@@ -105,9 +112,21 @@ func runServe(opts serveOptions) error {
 	}
 
 	addr := fmt.Sprintf("%s:%d", opts.Host, opts.Port)
+	var (
+		globals map[string]any
+		osenvWl []string
+		seed    int64
+	)
+	if cfg != nil {
+		globals = cfg.Globals
+		osenvWl = cfg.Server.OSEnvWhitelist
+		seed = cfg.Server.FakerSeed
+	}
+	renderer := tpl.NewRenderer(globals, osenvWl, seed)
+
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: assembleRouter(),
+		Handler: assembleRouter(cfg, renderer),
 	}
 
 	stop := make(chan os.Signal, 1)
@@ -118,7 +137,7 @@ func runServe(opts serveOptions) error {
 		fmt.Printf("fakeserver listening on http://%s\n", addr)
 		if cfg != nil {
 			PrintRouteSummary(cfg, os.Stdout)
-			fmt.Println("(Phase 2: mock routes are listed but not yet served; requests still echo)")
+			fmt.Println("(Phase 3: mock routes are registered and served)")
 		} else {
 			fmt.Println("no config; running in echo-only mode")
 		}
