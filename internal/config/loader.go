@@ -76,6 +76,24 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 			cfg.Routes[i].SourceFile = routeSources[i]
 		}
 	}
+
+	// v0.2 Phase 1: auto-load fakeserver.env.json5 next to the primary
+	// config file. envName="" so $active / first-segment selection
+	// applies; Phase 2 wires CLI/env-var to pass real envName.
+	if len(absSources) > 0 {
+		envPath := filepath.Join(filepath.Dir(absSources[0]), DefaultEnvFileName)
+		envMap, _, eerr := LoadEnvFile(envPath, "")
+		if eerr != nil {
+			return nil, fmt.Errorf("env file: %w", eerr)
+		}
+		cfg.Env = envMap
+		// EnvSource is only set when the file existed (LoadEnvFile returns
+		// empty map for missing files; we want EnvSource="" in that case).
+		if _, sterr := os.Stat(envPath); sterr == nil {
+			cfg.EnvSource = envPath
+		}
+	}
+
 	applyDefaults(cfg)
 	return cfg, nil
 }

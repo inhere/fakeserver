@@ -357,3 +357,52 @@ func TestLoad_RouteSourceFile_UserSuppliedSentinelIgnored(t *testing.T) {
 		t.Errorf("SourceFile = %q, want %q (user-supplied __source_file__ should be ignored)", got, want)
 	}
 }
+
+func TestLoad_EnvFile_AutoLoaded(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	envPath := filepath.Join(tmp, DefaultEnvFileName)
+
+	if err := os.WriteFile(cfgPath, []byte(`{ routes: [{ method: "GET", path: "/", body: "ok" }] }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(envPath, []byte(`{ $default: { x: "y" }, dev: { token: "t" } }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load([]string{cfgPath}, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// envName="" + no $active → first non-$default segment ("dev")
+	if cfg.Env["x"] != "y" {
+		t.Errorf("Env.x=%v want 'y' (from $default)", cfg.Env["x"])
+	}
+	if cfg.Env["token"] != "t" {
+		t.Errorf("Env.token=%v want 't' (from dev)", cfg.Env["token"])
+	}
+	if cfg.EnvSource != envPath {
+		t.Errorf("EnvSource=%q want %q", cfg.EnvSource, envPath)
+	}
+}
+
+func TestLoad_NoEnvFile_EmptyEnv(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	if err := os.WriteFile(cfgPath, []byte(`{ routes: [] }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load([]string{cfgPath}, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Env == nil {
+		t.Error("cfg.Env should be non-nil empty map, not nil")
+	}
+	if len(cfg.Env) != 0 {
+		t.Errorf("no env file → empty Env; got %v", cfg.Env)
+	}
+	if cfg.EnvSource != "" {
+		t.Errorf("no env file → empty EnvSource; got %q", cfg.EnvSource)
+	}
+}
