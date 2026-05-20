@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -96,5 +97,29 @@ func TestCompileRewrites_BadRegex(t *testing.T) {
 	_, err := compileRewrites(`[invalid => /x`)
 	if err == nil {
 		t.Error("expected regex compile error")
+	}
+}
+
+func TestCompileRewrites_MultipleArrows_FirstWins(t *testing.T) {
+	rules, err := compileRewrites(`^/foo => /bar=>baz`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, ok := applyRewrites(rules, "/foo")
+	if !ok {
+		t.Fatal("expected match")
+	}
+	if out != "/bar=>baz" {
+		t.Errorf("first '=>' is separator; got %q want /bar=>baz", out)
+	}
+}
+
+func TestCompileRewrites_EmptyPattern_Rejected(t *testing.T) {
+	_, err := compileRewrites(`=> /foo`)
+	if err == nil {
+		t.Fatal("expected error on empty pattern")
+	}
+	if !strings.Contains(err.Error(), "empty pattern") {
+		t.Errorf("error should mention 'empty pattern'; got %v", err)
 	}
 }

@@ -28,6 +28,9 @@ type rewriteRule struct {
 // Each rule must be "<go-regex> => <replacement>". $1, $2, ... in the
 // replacement reference regex capture groups (Go regexp ReplaceAllString
 // semantics; design §9.2 explicitly notes these are NOT template variables).
+// The first "=>" in src is the separator; later "=>" stay in the replacement
+// verbatim (e.g. "^/foo => /bar=>baz" yields pattern "^/foo" and replacement
+// "/bar=>baz").
 func compileRewrites(raw any) ([]*rewriteRule, error) {
 	if raw == nil {
 		return nil, nil
@@ -58,6 +61,9 @@ func compileRewrites(raw any) ([]*rewriteRule, error) {
 		}
 		pat := strings.TrimSpace(src[:idx])
 		repl := strings.TrimSpace(src[idx+2:])
+		if pat == "" {
+			return nil, fmt.Errorf("rewrite %q: empty pattern", src)
+		}
 		re, err := regexp.Compile(pat)
 		if err != nil {
 			return nil, fmt.Errorf("rewrite %q: regex compile: %w", src, err)
@@ -72,8 +78,7 @@ func compileRewrites(raw any) ([]*rewriteRule, error) {
 // matches.
 func applyRewrites(rules []*rewriteRule, path string) (string, bool) {
 	for _, r := range rules {
-		if loc := r.pattern.FindStringIndex(path); loc != nil {
-			_ = loc // location used only as a presence check
+		if r.pattern.MatchString(path) {
 			return r.pattern.ReplaceAllString(path, r.replacement), true
 		}
 	}
