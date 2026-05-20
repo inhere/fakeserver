@@ -23,6 +23,7 @@ func Run(version string) {
 	app.Add(newCheckCmd())
 	app.Add(newRoutesCmd())
 	app.Add(newListCmd())
+	app.Add(newUseCmd())
 	code := app.Run(nil)
 	os.Exit(code)
 }
