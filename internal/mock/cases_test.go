@@ -3,8 +3,10 @@ package mock
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -162,6 +164,43 @@ func TestRespondCases_CaseInheritsOuterDefaults(t *testing.T) {
 	}
 }
 
+func TestRespondCases_HeadersMergeCaseWinsOnConflict(t *testing.T) {
+	// outer has 2 headers; case has 2 headers, one overlapping
+	// expected after merge: 3 distinct keys; X-Both is case's value
+	route := &config.Route{
+		Method:   []string{"GET"},
+		Path:     "/m",
+		Headers:  map[string]string{"X-Outer-Only": "from-outer", "X-Both": "outer-value"},
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{
+				Status:  200,
+				Headers: map[string]string{"X-Case-Only": "from-case", "X-Both": "case-value"},
+				Body:    map[string]any{"ok": true},
+			},
+		},
+	}
+	r := tpl.NewRenderer(nil, nil, 1)
+	srv := startCasesServer(t, route, r)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if got := resp.Header.Get("X-Outer-Only"); got != "from-outer" {
+		t.Errorf("X-Outer-Only=%q want from-outer", got)
+	}
+	if got := resp.Header.Get("X-Case-Only"); got != "from-case" {
+		t.Errorf("X-Case-Only=%q want from-case", got)
+	}
+	if got := resp.Header.Get("X-Both"); got != "case-value" {
+		t.Errorf("X-Both=%q want case-value (case must win)", got)
+	}
+}
+
 // TestRespondCases_Random_HitsBothCases 单测 random 路径走通（分布在
 // selector_test.go 验证）。
 func TestRespondCases_Random_HitsBothCases(t *testing.T) {
@@ -208,6 +247,9 @@ func TestRespondCases_RuntimeWhenError_Skips(t *testing.T) {
 		},
 	}
 	r := tpl.NewRenderer(nil, nil, 1)
+	// Silence the expected warn-log so test output stays clean
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stderr)
 	srv := startCasesServer(t, route, r)
 	defer srv.Close()
 
