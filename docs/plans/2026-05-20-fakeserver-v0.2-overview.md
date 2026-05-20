@@ -240,7 +240,7 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 **Phase 3 commit 流水**：
 - Task 1: `6d3405e` (v0.2 综合 E2E)
 - Task 2: `2c7ca33` (bodyFile @include 回归)
-- Task 3: 文档回写 + bd close（本次 commit）
+- Task 3: `c13f6fb` (docs 回写 + Phase 3 plan 入库)
 
 ---
 
