@@ -10,6 +10,7 @@
 |---|---|---|---|
 | 2026-05-20 | v0.3-overview | inhere | 初稿。固化 v0.3 内部的 2 Phase 拆分（registry/PID + list/use CLI）|
 | 2026-05-20 | v0.3-overview-phase1-applied | inhere | Phase 1 落地：registry 包（store/lock/pid）+ serve 启动期 Upsert + PID 文件 |
+| 2026-05-20 | v0.3-overview-phase2-applied | inhere | Phase 2 落地：list/use 子命令 + envs 提取 + 跨进程并发 E2E + v0.3 milestone 闭环 |
 
 后续修订：每完成一个 Phase 后在对应行回写 commit 摘要与实际偏差。
 
@@ -33,7 +34,7 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
 | **1** | `internal/registry` 包（projects.json 读写 + 跨进程文件锁 + PID 文件）+ serve 启动期 Upsert | `internal/registry/{store,lock,pid}.go` + `internal/cli/serve.go` 接入 | `github.com/gofrs/flock v0.13.0`（Task 1 spike 决策）| v0.2 | ~600 行 | ✅ 已完成 (commit 9dba198..644b9e9) |
-| **2** | `fakeserver list / use` 子命令 + envs 提取 + 进程探活 + 综合 E2E + docs 回写 | `internal/cli/{list,use}.go` + registry 探活接口 + envs 提取助手 | — | Phase 1 | ~500 行 | 待开始 |
+| **2** | `fakeserver list / use` 子命令 + envs 提取 + 进程探活 + 综合 E2E + docs 回写 | `internal/cli/{list,use}.go` + registry 探活接口 + envs 提取助手 | — | Phase 1 | ~500 行 | ✅ 已完成 (commit 0e7277e..7227a23) |
 
 总计：v0.3 ≈ 1100 行代码（含测试），分 2 期落地。
 
@@ -183,6 +184,38 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 8. bd v0.3 总 epic 关闭；`bd ready` 不含任何 v0.3 相关 issue
 
 **对 design 章节的映射**：§10.5（CLI 行为）/ §10.3 跨进程文件锁的 E2E 验证 / §10.4 探活完整实现 / §14 v0.3 行清空"待开始"。
+
+**实际落地偏差**：
+
+- **`ExtractEnvNames` 放到 `internal/config` 包而非 `internal/registry`**：原 plan 设想 `registry/envs.go`，但 envs 提取需要复用 `config.loadFile`（包内函数），把它放到 `config/envfile.go` 与 `LoadEnvFile` 并排更干净；避免 registry → config 反向依赖。serve.go 调用方改为 `config.ExtractEnvNames`。
+- **`server.projectName` 配置覆盖未实现**：原计划包括"server.projectName 显式覆盖 name 字段"，实际落地 name 字段直接取 `filepath.Base(filepath.Dir(mainCfg))`。配置层加 string 字段属于 schema 改动，与 Phase 2 的 CLI 子命令目标不强相关；推迟到未来视用户反馈再加。design §10.2 字段描述保持"用户可在 server.projectName 显式覆盖"的设计意图，但本 Phase 不消费。
+- **list 死进程 PID 清理为 in-process 删除文件，不修改 projects.json**：design §10.4 "死进程清理 PID 文件" 已实现；但 Project.PIDFile 字段保留指向同一路径——下次 serve 重新启动会复用此 PIDFile 值并写新内容。简化了 list 的逻辑（不需要 Save 回 projects.json），且不影响 design §10.5 契约。
+- **跨进程 E2E 用 `TestMain` helper 模式**：通过环境变量 `FAKESERVER_REG_HELPER=1` 把测试二进制双用为 helper 子进程，避免另起一个独立 main 包。N=4 个子进程同时 Upsert 不同 id 验证文件锁正确性。
+
+**Phase 2 测试覆盖**：~16 个新增用例（envs 5 + list 4 + use 7+ + cross-process 1 + 综合 E2E 1）；`internal/registry` 80.9%；`internal/cli` 49.9%（v0.2 时 42.3%，本 Phase 提升 7.6 个百分点）；`internal/config` 88.3%（不下降）。
+
+**Phase 2 commit 流水**：
+- Task 1: `0e7277e` (ExtractEnvNames + serve 接入)
+- Task 2: `c243280` (list 子命令)
+- Task 3: `0db3225` (use 子命令)
+- Task 4: `95c3448` (跨进程并发 E2E)
+- Task 5: `7227a23` (综合 E2E)
+- Task 6: 文档收尾（本次 commit）
+
+---
+
+## v0.3 Milestone 闭环
+
+**v0.3 = design §10 (全局项目注册 + list/use + PID 文件) 完整落地**。
+
+| Phase | 提交范围 | 主要交付 |
+|---|---|---|
+| Phase 1 | `9dba198..af19a16` | registry 包（store/lock/pid）+ serve 启动期 Upsert + PID 文件 |
+| Phase 2 | `0e7277e..7227a23` | envs 提取 + list/use 子命令 + 跨进程并发 E2E + 综合 E2E |
+
+新增第三方依赖：`github.com/gofrs/flock v0.13.0`（跨平台文件锁）。
+
+v0.4 入口已就绪（design §11 Web UI + §12 请求历史 ring buffer + SSE 推送）。
 
 ---
 

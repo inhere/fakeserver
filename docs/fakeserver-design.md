@@ -19,6 +19,7 @@
 | 2026-05-20 | v0.4-phase0.2.2-applied | inhere | v0.2 Phase 2：env 选段 CLI/env-var 优先级链完整 + env 值模板渲染（osenv 白名单贯通）+ mock 模板 .env 接入 + env 文件 hot-reload |
 | 2026-05-20 | v0.4-phase0.2.3-applied | inhere | v0.2 Phase 3：综合 E2E + bodyFile @include 回归 + v0.2 milestone 闭环 |
 | 2026-05-20 | v0.4-phase0.3.1-applied | inhere | v0.3 Phase 1：registry 包（store/lock/pid）+ serve 启动期 Upsert + PID 写读 |
+| 2026-05-20 | v0.4-phase0.3.2-applied | inhere | v0.3 Phase 2：list/use 子命令 + envs 提取 + 跨进程并发 E2E + v0.3 milestone 闭环 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1275,6 +1276,12 @@ if seed == 0 {
 1. **registry 包零侵入接入 serve**：projects.json 读写、跨进程文件锁（gofrs/flock）、PID 文件 + IsAlive 探活全部在 `internal/registry` 内部封装；`internal/cli/serve.go` 仅在启动末尾与退出尾段调一次，不耦合具体实现细节。
 2. **失败策略一致 warn-only**：registry / PID 写入失败均仅 stderr warn，不阻塞 serve 启动——mock 功能优先于注册元数据；锁竞争超出 5 次重试退避（10ms~160ms）也走 warn-fallback 而非阻塞。
 3. **PID 文件路径以 CWD 为锚，registry 文件路径以 HOME 为锚**：前者随当前进程工作目录走（不同 CWD 启动 PID 互不冲突）；后者跨进程统一 `~/.config/fakeserver/projects.json`（Windows 也走该路径，不走 `%APPDATA%`），含跨进程文件锁与原子写。
+
+### 已落地（v0.3 Phase 2 阶段确认）
+
+1. **`fakeserver list` 子命令含 5 项语义**：6 列 tabwriter 表格（ID/NAME/STATUS/PORT/ENV/LAST RUN）+ PID 探活（活进程 running + port，死进程 idle + `-`）+ 自动清理死 PID 文件 + lastActiveId 优先排序 + 空注册表友好提示。
+2. **`fakeserver use <id>` 支持前缀匹配**：精确 id 命中优先；否则唯一前缀命中；多个匹配 → ambiguous 报错；不存在 → no match 报错；用 WithLock 持久化 lastActiveId 写回 projects.json。
+3. **跨进程文件锁契约通过 N=4 子进程并发 E2E 验证**：测试二进制双用为 helper 子进程（环境变量切换），同时 Upsert 不同 id，验证 projects.json 最终含 4 条记录无丢失——这是 design §10.3 "原子写 + 跨进程文件锁"契约的真正端到端确认。
 
 ### 待评审
 
