@@ -249,7 +249,7 @@
 
 ### Phase 5 — 运行时与可观测性
 
-**详细计划**：`phase5-runtime.md`（待生成）
+**详细计划**：[phase5-runtime.md](2026-05-19-fakeserver-v0.1-phase5-runtime.md)
 
 **目标**：补上 v0.1 剩下的运行时能力——中间件全套、热加载、admin `/routes`、CORS、请求日志、保留路径校验。**Phase 5 完成 = v0.1 MVP 闭环**。
 
