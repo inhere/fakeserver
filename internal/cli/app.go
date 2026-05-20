@@ -22,12 +22,7 @@ func Run(version string) {
 	app.Add(newInitCmd())
 	app.Add(newCheckCmd())
 	app.Add(newRoutesCmd())
-	// 未来子命令在此追加：
-	//   app.Add(newInitCmd())   // Phase 2
-	//   app.Add(newCheckCmd())  // Phase 2
-	//   app.Add(newRoutesCmd()) // Phase 2
-	//   app.Add(newListCmd())   // Phase 3
-	//   app.Add(newUseCmd())    // Phase 3
+	app.Add(newListCmd())
 	code := app.Run(nil)
 	os.Exit(code)
 }
