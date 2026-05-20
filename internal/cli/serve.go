@@ -168,9 +168,10 @@ func corsOptsFromCfg(cfg *config.Config) (middleware.CORSOpts, bool) {
 // optional *Config. Returns (nil, nil) when no -c was given and no
 // default-search candidate exists — caller treats this as "echo-only".
 func loadServeConfig(opts serveOptions) (*config.Config, error) {
+	overrides := parseVarOverrides(opts.VarOverrides)
 	paths := splitConfigPaths(opts.ConfigFlag)
 	if len(paths) > 0 {
-		cfg, err := config.Load(paths, opts.EnvName, nil)
+		cfg, err := config.Load(paths, opts.EnvName, overrides)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +184,7 @@ func loadServeConfig(opts serveOptions) (*config.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getwd: %w", err)
 	}
-	cfg, err := config.LoadDefault(wd, opts.EnvName)
+	cfg, err := config.LoadDefault(wd, opts.EnvName, overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +246,7 @@ func runServe(opts serveOptions) error {
 	if !opts.NoWatch && cfg != nil && len(cfg.SourcePaths) > 0 {
 		paths := cfg.SourcePaths
 		watcher, err = config.NewWatcher(paths, 300*time.Millisecond, func() {
-			newCfg, lerr := config.Load(paths, opts.EnvName, nil)
+			newCfg, lerr := config.Load(paths, opts.EnvName, parseVarOverrides(opts.VarOverrides))
 			if lerr != nil {
 				fmt.Fprintln(os.Stderr, "warn: reload load err:", lerr)
 				return

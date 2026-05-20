@@ -95,6 +95,17 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 		}
 	}
 
+	// v0.2 Phase 2: --var top-level overrides (design §8.2 deepMerge step).
+	// Phase 2 simplifies to top-level key replacement; no dotted-path support.
+	if len(overrides) > 0 {
+		if cfg.Env == nil {
+			cfg.Env = map[string]any{}
+		}
+		for k, v := range overrides {
+			cfg.Env[k] = v
+		}
+	}
+
 	applyDefaults(cfg)
 	return cfg, nil
 }
@@ -404,11 +415,11 @@ func cyclePath(visiting map[string]bool, dup string) string {
 // DefaultPaths) and loads the first one that exists. Returns (nil, nil)
 // — not an error — when none exist, so the caller (cli/serve.go) can
 // degrade to echo-only mode silently.
-func LoadDefault(cwd, envName string) (*Config, error) {
+func LoadDefault(cwd, envName string, overrides map[string]string) (*Config, error) {
 	for _, rel := range DefaultPaths() {
 		abs := filepath.Join(cwd, rel)
 		if _, err := os.Stat(abs); err == nil {
-			return Load([]string{abs}, envName, nil)
+			return Load([]string{abs}, envName, overrides)
 		}
 	}
 	return nil, nil

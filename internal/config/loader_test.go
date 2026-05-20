@@ -239,7 +239,7 @@ func TestLoadDefault_PicksFirstExistingCandidate(t *testing.T) {
 	if err := os.WriteFile(target, []byte(`{"routes":[{"method":"GET","path":"/x","body":"x"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := LoadDefault(tmpDir, "")
+	cfg, err := LoadDefault(tmpDir, "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestLoadDefault_PicksFirstExistingCandidate(t *testing.T) {
 
 func TestLoadDefault_NoneExistReturnsNilNilNoError(t *testing.T) {
 	tmpDir := t.TempDir()
-	cfg, err := LoadDefault(tmpDir, "")
+	cfg, err := LoadDefault(tmpDir, "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error when no defaults exist: %v", err)
 	}
@@ -449,5 +449,38 @@ func TestLoad_EnvFile_AddedToSourcePaths(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("env path not in SourcePaths: %v", cfg.SourcePaths)
+	}
+}
+
+func TestLoad_VarOverride_TopLevelKeys(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	envPath := filepath.Join(tmp, DefaultEnvFileName)
+	_ = os.WriteFile(cfgPath, []byte(`{ routes: [] }`), 0644)
+	_ = os.WriteFile(envPath, []byte(`{ dev: { apiHost: "from-file", token: "T" } }`), 0644)
+
+	cfg, err := Load([]string{cfgPath}, "dev", map[string]string{"apiHost": "OVERRIDE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Env["apiHost"] != "OVERRIDE" {
+		t.Errorf("apiHost=%v want OVERRIDE", cfg.Env["apiHost"])
+	}
+	if cfg.Env["token"] != "T" {
+		t.Errorf("token=%v want T (untouched)", cfg.Env["token"])
+	}
+}
+
+func TestLoad_VarOverride_WithoutEnvFile(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	_ = os.WriteFile(cfgPath, []byte(`{ routes: [] }`), 0644)
+	// no env file present
+	cfg, err := Load([]string{cfgPath}, "", map[string]string{"k": "v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Env["k"] != "v" {
+		t.Errorf("k=%v want v (overrides should work without env file)", cfg.Env["k"])
 	}
 }
