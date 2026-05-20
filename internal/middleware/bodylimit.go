@@ -43,7 +43,10 @@ func BodyLimit(max int64) func(http.Handler) http.Handler {
 }
 
 // readUpTo reads from r into buf. Returns (n, nil) on EOF within buf;
-// returns (n, err) when there's MORE data beyond buf.
+// returns (n, err) when there's MORE data beyond buf (i.e. body >= len(buf)).
+//
+// buf must be sized max+1 by the caller so that filling buf exactly means
+// "body is at least max+1 bytes" — over the limit.
 func readUpTo(r io.ReadCloser, buf []byte) (int, error) {
 	defer r.Close()
 	total := 0
@@ -51,18 +54,18 @@ func readUpTo(r io.ReadCloser, buf []byte) (int, error) {
 		n, err := r.Read(buf[total:])
 		total += n
 		if err == io.EOF {
+			if total >= len(buf) {
+				// buf is max+1; filling it exactly means body == max+1 — over limit.
+				return total, errors.New("body exceeds limit")
+			}
 			return total, nil
 		}
 		if err != nil {
 			return total, err
 		}
 	}
-	extra := make([]byte, 1)
-	n, _ := r.Read(extra)
-	if n > 0 {
-		return total, errors.New("body exceeds limit")
-	}
-	return total, nil
+	// Loop exited because total == len(buf) == max+1 — buffer filled, over limit.
+	return total, errors.New("body exceeds limit")
 }
 
 func writeBodyLimitError(w http.ResponseWriter, max int64) {

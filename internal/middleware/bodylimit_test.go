@@ -87,3 +87,22 @@ func TestBodyLimit_NoBodyOk(t *testing.T) {
 		t.Errorf("status=%d want 200 (no body, no rejection)", rec.Code)
 	}
 }
+
+// TestBodyLimit_OneOverLimit 锁定 max+1 字节边界 bug：body 恰好为 limit+1
+// 字节时必须返回 413，否则限制可被 off-by-one 绕过。
+func TestBodyLimit_OneOverLimit(t *testing.T) {
+	called := false
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	})
+	mw := BodyLimit(16)(h)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/x", strings.NewReader(strings.Repeat("a", 17)))
+	mw.ServeHTTP(rec, req)
+	if called {
+		t.Error("handler should NOT have been called on body=limit+1")
+	}
+	if rec.Code != 413 {
+		t.Errorf("status=%d want 413 (body=17 must exceed limit=16)", rec.Code)
+	}
+}

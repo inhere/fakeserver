@@ -260,8 +260,11 @@ func proxyClientIP(req *http.Request) string {
 }
 
 // readUpTo reads from r into buf. Returns (n, nil) when r ends within
-// len(buf) bytes; returns (n, err) when there's MORE data beyond buf —
-// signaling the caller "body exceeded the limit".
+// len(buf) bytes; returns (n, err) when body >= len(buf) — signaling
+// the caller "body exceeded the limit".
+//
+// buf must be sized max+1 by the caller so that filling buf exactly means
+// "body is at least max+1 bytes" — over the limit.
 func readUpTo(r io.ReadCloser, buf []byte) (int, error) {
 	// Close the original body once. The caller will reinstall a new
 	// io.NopCloser(bytes.NewReader(...)) on the request before passing
@@ -273,19 +276,18 @@ func readUpTo(r io.ReadCloser, buf []byte) (int, error) {
 		n, err := r.Read(buf[total:])
 		total += n
 		if err == io.EOF {
+			if total >= len(buf) {
+				// buf is max+1; filling it exactly means body == max+1 — over limit.
+				return total, errors.New("body exceeds limit")
+			}
 			return total, nil
 		}
 		if err != nil {
 			return total, err
 		}
 	}
-	// Buffer full; probe for one more byte to detect overflow
-	extra := make([]byte, 1)
-	n, _ := r.Read(extra)
-	if n > 0 {
-		return total, errors.New("body exceeds limit")
-	}
-	return total, nil
+	// Loop exited because total == len(buf) == max+1 — buffer filled, over limit.
+	return total, errors.New("body exceeds limit")
 }
 
 // parseByteSize converts "10MiB", "16B", "1KiB" etc into a byte count.

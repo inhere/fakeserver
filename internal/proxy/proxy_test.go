@@ -355,6 +355,31 @@ func TestProxy_BodyLimit_ExactlyAtLimit(t *testing.T) {
 	}
 }
 
+// TestProxy_BodyLimit_OneOverLimit 锁定 max+1 字节边界 bug：body 恰好为
+// proxy.bodyLimit+1 字节时必须返回 413（同 bodylimit middleware）。
+func TestProxy_BodyLimit_OneOverLimit(t *testing.T) {
+	upstream := echoUpstream(t)
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"POST"}, Path: "/x",
+			Proxy:  &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/x", "text/plain", strings.NewReader(strings.Repeat("a", 17)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 413 {
+		t.Errorf("status=%d want 413 (body=17 must exceed limit=16)", resp.StatusCode)
+	}
+}
+
 func TestParseByteSize(t *testing.T) {
 	tests := []struct {
 		in   string
