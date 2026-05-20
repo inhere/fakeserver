@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/inhere/fakeserver/internal/tpl"
 	"github.com/titanous/json5"
 )
 
@@ -93,6 +94,13 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 			cfg.EnvSource = envPath
 			cfg.SourcePaths = append(cfg.SourcePaths, envPath)
 		}
+	}
+
+	// v0.2 Phase 2 Task 4: render env values (osenv etc.) before --var overrides.
+	// Uses cfg.Server.OSEnvWhitelist directly; applyDefaults hasn't run yet
+	// but a nil whitelist means "allow all" (developer-friendly default).
+	if rerr := tpl.RenderEnvValues(cfg.Env, cfg.Server.OSEnvWhitelist, cfg.Globals); rerr != nil {
+		return nil, fmt.Errorf("env file: render values: %w", rerr)
 	}
 
 	// v0.2 Phase 2: --var top-level overrides (design §8.2 deepMerge step).
