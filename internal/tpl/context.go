@@ -45,7 +45,9 @@ type RequestCtx struct {
 // work with Go text/template's reflection-based field access.
 //
 // params come from the router (rux path params); globals is cfg.Globals
-// (set once at load time). Body is parsed lazily based on Content-Type:
+// (set once at load time); envMap is cfg.Env (resolved env file values,
+// design §8.4 / v0.2 Phase 2). A nil envMap is treated as an empty map.
+// Body is parsed lazily based on Content-Type:
 //
 //	application/json (or */+json) → map or slice
 //	application/x-www-form-urlencoded → map[string]any (multi-value → []string)
@@ -53,7 +55,7 @@ type RequestCtx struct {
 //	other / empty → original bytes as string
 //
 // On parse failure for json/form, body falls back to string.
-func BuildRenderCtx(req *http.Request, params map[string]string, globals map[string]any) map[string]any {
+func BuildRenderCtx(req *http.Request, params map[string]string, globals, envMap map[string]any) map[string]any {
 	bodyBytes, _ := io.ReadAll(req.Body)
 	_ = req.Body.Close()
 	bodyRaw := string(bodyBytes)
@@ -61,6 +63,9 @@ func BuildRenderCtx(req *http.Request, params map[string]string, globals map[str
 
 	if params == nil {
 		params = map[string]string{}
+	}
+	if envMap == nil {
+		envMap = map[string]any{}
 	}
 
 	return map[string]any{
@@ -77,7 +82,7 @@ func BuildRenderCtx(req *http.Request, params map[string]string, globals map[str
 			"bodyRaw": bodyRaw,
 		},
 		"now":    time.Now(),
-		"env":    map[string]any{},
+		"env":    envMap,
 		"osenv":  map[string]string{},
 		"config": globals,
 	}

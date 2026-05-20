@@ -32,7 +32,7 @@ func startCasesServer(t *testing.T, route *config.Route, renderer tpl.Renderer) 
 	sel := NewSelector(route.Strategy)
 	r := rux.New()
 	h := func(c *rux.Context) {
-		RespondCases(c, route, matchers, sel, renderer)
+		RespondCases(c, route, matchers, sel, renderer, nil)
 	}
 	for _, m := range route.Method {
 		if m == "*" {

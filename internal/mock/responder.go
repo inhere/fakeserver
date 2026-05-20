@@ -32,8 +32,8 @@ import (
 //  7. write to ResponseWriter
 //
 // On any rendering error the response becomes 500 + JSON error body.
-func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer) {
-	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil)
+func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer, envMap map[string]any) {
+	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil, envMap)
 
 	// 2. Render headers
 	renderedHeaders, err := renderHeaders(route.Headers, renderer, ctx)

@@ -32,7 +32,7 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 		if route.Proxy == nil {
 			continue
 		}
-		handler, err := Build(route, renderer)
+		handler, err := Build(route, renderer, cfg.Env)
 		if err != nil {
 			return fmt.Errorf("routes[%d] (%s %s): %w", i, strings.Join(route.Method, ","), route.Path, err)
 		}
@@ -57,7 +57,7 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 // All other fields (target, rewrite, stripPathPrefix, timeout, etc.) are
 // literal. The rewrite regex's $1, $2... are Go regexp capture groups,
 // NOT template variables.
-func Build(route *config.Route, renderer tpl.Renderer) (rux.HandlerFunc, error) {
+func Build(route *config.Route, renderer tpl.Renderer, envMap map[string]any) (rux.HandlerFunc, error) {
 	p := route.Proxy
 	if p == nil {
 		return nil, fmt.Errorf("Build called with nil Proxy")
@@ -127,7 +127,7 @@ func Build(route *config.Route, renderer tpl.Renderer) (rux.HandlerFunc, error) 
 			// consuming req.Body (BuildRenderCtx reads+closes the body, which
 			// would break body forwarding to upstream).
 			if len(p.Headers) > 0 {
-				ctx := buildProxyRenderCtx(req)
+				ctx := buildProxyRenderCtx(req, envMap)
 				for k, v := range p.Headers {
 					rendered, rerr := renderer.Render(v, ctx)
 					if rerr != nil {
@@ -142,7 +142,7 @@ func Build(route *config.Route, renderer tpl.Renderer) (rux.HandlerFunc, error) 
 			if len(p.ResponseHeaders) == 0 {
 				return nil
 			}
-			ctx := buildProxyRenderCtx(resp.Request)
+			ctx := buildProxyRenderCtx(resp.Request, envMap)
 			for k, v := range p.ResponseHeaders {
 				rendered, rerr := renderer.Render(v, ctx)
 				if rerr != nil {
@@ -207,7 +207,7 @@ func Build(route *config.Route, renderer tpl.Renderer) (rux.HandlerFunc, error) 
 //
 // Templates referencing those keys will get nil → empty string. Users who
 // need request body in header injection should switch to a mock route.
-func buildProxyRenderCtx(req *http.Request) map[string]any {
+func buildProxyRenderCtx(req *http.Request, envMap map[string]any) map[string]any {
 	headers := make(map[string]string, len(req.Header))
 	for k, vs := range req.Header {
 		if len(vs) > 0 {
@@ -222,6 +222,9 @@ func buildProxyRenderCtx(req *http.Request) map[string]any {
 			query[k] = vs
 		}
 	}
+	if envMap == nil {
+		envMap = map[string]any{}
+	}
 	return map[string]any{
 		"request": map[string]any{
 			"method":  req.Method,
@@ -233,7 +236,7 @@ func buildProxyRenderCtx(req *http.Request) map[string]any {
 			"headers": headers,
 		},
 		"now":    time.Now(),
-		"env":    map[string]any{},
+		"env":    envMap,
 		"osenv":  map[string]string{},
 		"config": map[string]any{},
 	}

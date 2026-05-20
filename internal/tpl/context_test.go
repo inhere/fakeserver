@@ -22,7 +22,7 @@ func TestBuildRenderCtx_BasicFields(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = "127.0.0.1:12345"
 
-	ctx := BuildRenderCtx(req, map[string]string{"id": "42"}, map[string]any{"apiVersion": "v1"})
+	ctx := BuildRenderCtx(req, map[string]string{"id": "42"}, map[string]any{"apiVersion": "v1"}, nil)
 	r := getRequest(t, ctx)
 	if r["method"] != "POST" {
 		t.Errorf("method: got %q", r["method"])
@@ -63,7 +63,7 @@ func TestBuildRenderCtx_JSONBodyParsed(t *testing.T) {
 	req := httptest.NewRequest("POST", "/x", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	parsed, ok := r["body"].(map[string]any)
 	if !ok {
@@ -81,7 +81,7 @@ func TestBuildRenderCtx_TextBodyAsString(t *testing.T) {
 	req := httptest.NewRequest("POST", "/x", strings.NewReader("hello world"))
 	req.Header.Set("Content-Type", "text/plain")
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	if s, ok := r["body"].(string); !ok || s != "hello world" {
 		t.Errorf("body: got %v (%T)", r["body"], r["body"])
@@ -93,7 +93,7 @@ func TestBuildRenderCtx_FormBody(t *testing.T) {
 	req := httptest.NewRequest("POST", "/x", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	parsed, ok := r["body"].(map[string]any)
 	if !ok {
@@ -111,7 +111,7 @@ func TestBuildRenderCtx_JSONBodyFallbackOnParseError(t *testing.T) {
 	req := httptest.NewRequest("POST", "/x", strings.NewReader(raw))
 	req.Header.Set("Content-Type", "application/json")
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	if s, ok := r["body"].(string); !ok || s != raw {
 		t.Errorf("bad JSON should fall back to string; got %T = %v", r["body"], r["body"])
@@ -125,7 +125,7 @@ func TestBuildRenderCtx_JSONPlusSuffixContentType(t *testing.T) {
 	req := httptest.NewRequest("POST", "/x", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/vnd.api+json")
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	parsed, ok := r["body"].(map[string]any)
 	if !ok {
@@ -141,7 +141,7 @@ func TestBuildRenderCtx_UnknownContentTypeAsString(t *testing.T) {
 	req := httptest.NewRequest("POST", "/x", strings.NewReader("binary-like"))
 	req.Header.Set("Content-Type", "application/octet-stream")
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	if s, ok := r["body"].(string); !ok || s != "binary-like" {
 		t.Errorf("body: got %v (%T)", r["body"], r["body"])
@@ -151,7 +151,7 @@ func TestBuildRenderCtx_UnknownContentTypeAsString(t *testing.T) {
 // TestBuildRenderCtx_MultiValueQueryFlattened: 同 key 多值 query 应展开为 []string。
 func TestBuildRenderCtx_MultiValueQueryFlattened(t *testing.T) {
 	req := httptest.NewRequest("GET", "/x?tag=a&tag=b&single=1", nil)
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	q := r["query"].(map[string]any)
 	tags, ok := q["tag"].([]string)
@@ -172,7 +172,7 @@ func TestBuildRenderCtx_ClientIPFromXForwardedFor(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "203.0.113.1, 10.0.0.1")
 	req.RemoteAddr = "127.0.0.1:9999"
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	if r["ip"] != "203.0.113.1" {
 		t.Errorf("ip: got %v", r["ip"])
@@ -185,7 +185,7 @@ func TestBuildRenderCtx_ClientIPFromXRealIP(t *testing.T) {
 	req.Header.Set("X-Real-Ip", "198.51.100.5")
 	req.RemoteAddr = "127.0.0.1:9999"
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	if r["ip"] != "198.51.100.5" {
 		t.Errorf("ip: got %v", r["ip"])
@@ -197,9 +197,30 @@ func TestBuildRenderCtx_ClientIPFromRemoteAddr(t *testing.T) {
 	req := httptest.NewRequest("GET", "/x", nil)
 	req.RemoteAddr = "192.0.2.1:54321"
 
-	ctx := BuildRenderCtx(req, nil, nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
 	r := getRequest(t, ctx)
 	if r["ip"] != "192.0.2.1" {
 		t.Errorf("ip: got %v", r["ip"])
+	}
+}
+
+func TestBuildRenderCtx_EnvAccessible(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := BuildRenderCtx(req, nil, nil, map[string]any{"token": "T"})
+	env, ok := ctx["env"].(map[string]any)
+	if !ok {
+		t.Fatalf(".env not a map: %T", ctx["env"])
+	}
+	if env["token"] != "T" {
+		t.Errorf(".env.token=%v want T", env["token"])
+	}
+}
+
+func TestBuildRenderCtx_NilEnvBecomesEmptyMap(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := BuildRenderCtx(req, nil, nil, nil)
+	env, ok := ctx["env"].(map[string]any)
+	if !ok || env == nil {
+		t.Errorf(".env should be non-nil empty map; got %v", ctx["env"])
 	}
 }

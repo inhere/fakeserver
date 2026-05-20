@@ -32,6 +32,7 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 			continue
 		}
 
+		envMap := cfg.Env // capture per-route so the closure is allocation-light
 		var handler rux.HandlerFunc
 		if len(route.Cases) > 0 {
 			matchers := make([]*Matcher, len(route.Cases))
@@ -44,11 +45,11 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 			}
 			selector := NewSelector(route.Strategy)
 			handler = func(c *rux.Context) {
-				RespondCases(c, route, matchers, selector, renderer)
+				RespondCases(c, route, matchers, selector, renderer, envMap)
 			}
 		} else {
 			handler = func(c *rux.Context) {
-				Respond(c, route, renderer)
+				Respond(c, route, renderer, envMap)
 			}
 		}
 

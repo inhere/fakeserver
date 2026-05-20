@@ -31,7 +31,7 @@ func newRespondServer(t *testing.T, method, registerPath string, route *config.R
 	t.Helper()
 	r := rux.New()
 	r.Add(registerPath, func(c *rux.Context) {
-		Respond(c, route, renderer)
+		Respond(c, route, renderer, nil)
 	}, method)
 	return httptest.NewServer(r)
 }
@@ -445,6 +445,31 @@ func TestRespond_StatusZeroDefaultsTo200(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Errorf("status zero defaults to 200; got %d", resp.StatusCode)
+	}
+}
+
+// TestRespond_EnvAccessibleInTemplate: cfg.Env 注入后模板可访问 .env.* 键
+func TestRespond_EnvAccessibleInTemplate(t *testing.T) {
+	route := &config.Route{
+		Method: []string{"GET"}, Path: "/",
+		Body: "{{ .env.token }}",
+	}
+	rdr := tpl.NewRenderer(nil, nil, 1)
+	r := rux.New()
+	envMap := map[string]any{"token": "T-FROM-ENV"}
+	r.GET("/", func(c *rux.Context) {
+		Respond(c, route, rdr, envMap)
+	})
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(b) != "T-FROM-ENV" {
+		t.Errorf("body=%q want T-FROM-ENV", string(b))
 	}
 }
 
