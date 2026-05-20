@@ -15,6 +15,17 @@ type Config struct {
 	// Used by validate.go for error messages and (in Phase 5) by the
 	// hot-reload watcher to decide which files to subscribe to.
 	SourcePaths []string `json:"-"`
+
+	// Env is the resolved environment block (= $default ∪ chosen segment).
+	// design §8.4: route templates access this via {{ .env.* }}.
+	// v0.2 Phase 1 fills this from envfile.go; Phase 2 adds CLI/env-var
+	// selection + template rendering of env values.
+	Env map[string]any `json:"-"`
+
+	// EnvSource is the absolute path of the env file that contributed
+	// Env, or "" if no env file was found. v0.2 Phase 2 uses this to
+	// extend watcher's SourcePaths so env edits trigger hot reload.
+	EnvSource string `json:"-"`
 }
 
 // ServerOpts mirrors the "server" block in JSON5. Each field's default is
