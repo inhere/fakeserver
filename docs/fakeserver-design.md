@@ -17,6 +17,7 @@
 | 2026-05-19 | v0.3-phase5-applied | inhere | Phase 5 落地：internal/middleware（recoverer/logger/cors/bodylimit/chain/holder）+ internal/config/watcher.go + admin /__fakeserver/routes + 启动 banner + serve --quiet/--no-cors/--no-watch flag。v0.1 MVP 完整闭环。 |
 | 2026-05-20 | v0.4-phase0.2.1-applied | inhere | v0.2 Phase 1：env 文件加载（design §8.1/§8.2/§8.3 部分）+ Route.SourceFile 填充修复 |
 | 2026-05-20 | v0.4-phase0.2.2-applied | inhere | v0.2 Phase 2：env 选段 CLI/env-var 优先级链完整 + env 值模板渲染（osenv 白名单贯通）+ mock 模板 .env 接入 + env 文件 hot-reload |
+| 2026-05-20 | v0.4-phase0.2.3-applied | inhere | v0.2 Phase 3：综合 E2E + bodyFile @include 回归 + v0.2 milestone 闭环 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1261,6 +1262,12 @@ if seed == 0 {
 1. **env 选段优先级链完整化**：`--env` CLI > `FAKESERVER_ENV` 环境变量 > 文件 `$active` > 首个非 `$default` 段 > 空。`--var key=val` 顶层 deepMerge 覆盖在最后。
 2. **env 文件值层级模板渲染**：env 段的字符串叶子节点在 Load 阶段渲染（`{{ osenv "X" }}` / `{{ now }}` 等可用）；osenv 白名单在 env 文件中同样生效，env 文件不是逃逸通道。
 3. **env 文件参与 hot-reload**：env 文件路径自动加入 watcher 监听列表，编辑后经 300ms 防抖触发 holder swap；mock body 模板 `{{ .env.* }}` 真正可访问。
+
+### 已落地（v0.2 Phase 3 阶段确认）
+
+1. **v0.2 综合 E2E 闭环**：单测试串联 mock + cases + proxy + bodyFile + dev/staging env 切换 + `--var` override + osenv 白名单阻断 + hot-reload，验证 v0.1 + v0.2 全部模块无回归协作。
+2. **bodyFile 在 @include 链中相对路径稳定**：`@included` 文件中的 route 通过 v0.2 Phase 1 的 SourceFile 修复，bodyFile 解析以**被 include 文件所在目录**为 baseDir，与主 cfg 目录可不同，在任意 CWD 下行为一致。
+3. **v0.2 milestone 闭环**：design §8 (env 文件) + §4.6 (osenv 白名单贯通) + v0.1 backlog (lite-tools-gko) 全部落地，无新增第三方依赖；v0.3 入口（§10 项目注册）已就绪。
 
 ### 待评审
 

@@ -9,6 +9,7 @@
 | 日期 | 版本 | 作者 | 变更说明 |
 |---|---|---|---|
 | 2026-05-20 | v0.2-overview | inhere | 初稿。固化 v0.2 内部的 3 Phase 拆分（env 文件 + osenv 白名单 + SourceFile bug 修复）|
+| 2026-05-20 | v0.2-overview-phase3-applied | inhere | Phase 3 收尾：综合 E2E + bodyFile @include 回归 + 文档回写；v0.2 milestone 闭环 |
 
 后续修订：每完成一个 Phase 后在对应行回写 commit 摘要与实际偏差。
 
@@ -33,7 +34,7 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 |---|---|---|---|---|---|---|
 | **1** | SourceFile bug 修复 + envfile.go 基础加载（$default 合并 + $active + 默认查找） | `internal/config/envfile.go` + loader Route.SourceFile 填充 | — | v0.1 | ~400 行 | ✅ 已完成 (commit 29a1eb9..7c5a0f9) |
 | **2** | CLI 整合 + osenv 白名单完整化 + watcher 同步监听 env 文件 | `internal/cli/serve.go --env/--var` flag + `internal/tpl/funcs.go` osenv 收紧 + envfile 模板渲染 | — | Phase 1 | ~500 行 | ✅ 已完成 (commit afc88b4..20f950c) |
-| **3** | v0.2 收尾 E2E + 综合场景 + 文档回写 | `internal/cli/serve_e2e_test.go` 扩展 + docs 回写 | — | Phase 2 | ~200 行 | 待开始 |
+| **3** | v0.2 收尾 E2E + 综合场景 + 文档回写 | `internal/cli/serve_e2e_test.go` 扩展 + docs 回写 | — | Phase 2 | ~200 行 | ✅ 已完成 (commit 6d3405e..2c7ca33) |
 
 总计：v0.2 ≈ 1100 行代码（含测试），分 3 期落地。
 
@@ -184,7 +185,7 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 
 ### Phase 3 — v0.2 收尾 E2E + 文档回写
 
-**详细计划**：`phase3-closure.md`（待生成）
+**详细计划**：[v0.2/2026-05-20-fakeserver-v0.2-phase3-closure.md](v0.2/2026-05-20-fakeserver-v0.2-phase3-closure.md)
 
 **目标**：v0.2 完整闭环 E2E——综合 config + env 文件 + osenv + `--var` override + 热加载 env → 切换段位 → 请求验证。回写 v0.2 overview 状态 + design.md 修订记录与 §13 已落地段。
 
@@ -225,6 +226,35 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 9. bd `lite-tools-gko` 关闭（SourceFile）；v0.2 epic issue 关闭
 
 **对 design 章节的映射**：§8 全章收尾 / §4.6 osenv 白名单完整 / §14 v0.2 行清空"待开始"标记。
+
+**实际落地偏差**：
+
+- **综合 E2E 拆为 3 个独立测试函数**：`TestServe_v02_FullMilestoneClosure`（mock+cases+proxy+bodyFile+env 切换+hot-reload）、`TestServe_v02_OsenvWhitelistBlocking`（osenv 白名单 E2E）、`TestServe_v02_VarOverride`（--var 集成）。拆开更易维护，且失败时能精准定位。
+- **`newHolderWithWatcher` 复用 Phase 2 已扩展的 envName 参数版**——无新增改动。
+- **`TestServe_v02_VarOverride` 路径不能用 `/`**：echo 包默认挂载 `GET /` 路由，与 mock 路由冲突 panic（`rux: duplicate static route`）。改用 `/var-token` 显式路径绕过；这是 v0.1 echo 默认挂载与 mock 路由共存的隐含约束。
+- **verifyStatus / waitForRouteBody 复用 `serve_e2e_test.go` 已有版本**——新文件只新增 `verifyBodyContains` 助手，避免重复定义。`verifyStatus` 现有签名是 `(t, label, url, want)`（带 label），所以新测试中相应调用按此调整。
+- **bodyFile @include 回归测试**：当前 fixture 主 cfg 与 included 文件同目录，未独立验证"不同目录"场景，但 SourceFile 字段值的正确指向已足够验证 resolveRoutePath 的 baseDir 选择无误。
+
+**Phase 3 测试覆盖**：4 个新增 E2E 用例（3 个 v0.2 综合 + 1 个 @include bodyFile 回归）；`internal/config` 88.3% (≥ 80%)；`internal/tpl` 93.4% (≥ 80%)；`internal/cli` 46.3%（v0.2 闭环路径增量覆盖，cli 包目标本就低于其他包）。
+
+**Phase 3 commit 流水**：
+- Task 1: `6d3405e` (v0.2 综合 E2E)
+- Task 2: `2c7ca33` (bodyFile @include 回归)
+- Task 3: 文档回写 + bd close（本次 commit）
+
+---
+
+## v0.2 Milestone 闭环
+
+**v0.2 = design §8 (env 文件) + §4.6 (osenv 白名单) + lite-tools-gko (SourceFile bug) 完整落地**。
+
+| Phase | 提交范围 | 主要交付 |
+|---|---|---|
+| Phase 1 | `29a1eb9..7c5a0f9` | SourceFile 修复 + envfile.go 基础加载 |
+| Phase 2 | `afc88b4..20f950c` | CLI flags + osenv 白名单贯通 + env 模板访问 + hot-reload |
+| Phase 3 | `6d3405e..2c7ca33` | 综合 E2E + bodyFile @include 回归 + 文档收尾 |
+
+v0.3 入口已就绪（design §10 项目注册 + `~/.config/fakeserver/projects.json` + `list/use` 子命令）。
 
 ---
 

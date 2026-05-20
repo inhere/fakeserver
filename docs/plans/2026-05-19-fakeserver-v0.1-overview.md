@@ -391,3 +391,14 @@ overview → phase1 → 执行 → 回写 design § 13 → overview 更新状态
 | rux v2 OPTIONS 与中间件的执行顺序 | Phase 5 | 中 | Phase 5 Task 中验证；如顺序不可控考虑自定义 mux 包装 |
 
 每个不确定项在对应 Phase plan 的"前置探测"步骤里**先 spike 再实现**，避免实现到一半发现底层假设错（这次 Phase 1 rux v2 API 探测就是案例）。
+
+---
+
+## v0.2 衍生事项（追溯，2026-05-20）
+
+v0.1 完成时遗留的 backlog 项已在 v0.2 修复：
+
+- ✅ `bd lite-tools-gko` 已关闭（v0.2 Phase 1）——`Route.SourceFile` 在 loader 内部 sentinel + zip 方案下正确填充，相对 `bodyFile` 路径在任意 CWD 下稳定。v0.2 Phase 3 又补了一个 `@include` 链中 bodyFile 的回归用例 (`TestLoad_BodyFile_FromIncludedFile_RelativePathResolved`)。
+
+v0.2 整体进展：见 [`2026-05-20-fakeserver-v0.2-overview.md`](2026-05-20-fakeserver-v0.2-overview.md)。
+
