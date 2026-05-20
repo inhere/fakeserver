@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/gookit/cliui v0.2.3 // indirect
 	github.com/gookit/color v1.6.1 // indirect
 	github.com/gookit/filter v1.2.3 // indirect
@@ -22,7 +23,7 @@ require (
 	github.com/monoculum/formam v3.5.5+incompatible // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/term v0.29.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 )
