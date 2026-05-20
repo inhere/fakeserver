@@ -48,8 +48,17 @@ func newServeCmd() *gcli.Command {
 }
 
 // assembleRouter mounts mock routes first, then proxy routes, then admin
-// endpoints, then echo as fallback. rux's radix tree (static > param >
-// wildcard) ensures specific user routes win over the echo /*path catch-all.
+// endpoints, then echo as fallback.
+//
+// Order matters: rux resolves equal-path conflicts by registration order
+// in the radix tree. By mounting mock before proxy, an exact mock route
+// like /api/users wins over a wildcard proxy route like /api/*rest — which
+// is the typical "intercept one path, forward the rest" pattern. Reverse
+// the order and the wildcard would swallow the exact route.
+//
+// rux's tree priority (static > param > wildcard) still applies inside
+// each mount, so /api/users (static) beats /api/{id} (param) regardless
+// of registration order.
 //
 // cfg may be nil — in that case both Mount calls are no-ops and the server
 // behaves identically to Phase 1's zero-config mode.
@@ -104,9 +113,11 @@ func joinErrs(errs []error) string {
 // runServe assembles the router, optionally loads and prints config, then
 // runs the HTTP server with signal-driven graceful shutdown.
 //
-// Phase 3: cfg.Routes are now REGISTERED to the router via mock.Mount;
-// each single-response route gets a dedicated HTTP handler. Renderer is
-// constructed from cfg (if present) and passed to assembleRouter.
+// Phase 4: cfg.Routes include single-response mocks (Respond), multi-
+// response cases routes (RespondCases via mock.Mount), and proxy routes
+// (proxy.Mount). Renderer is constructed from cfg.Globals/OSEnvWhitelist/
+// FakerSeed (if present) and shared across all three handlers. config.Warn
+// advisories print to stderr before listen.
 func runServe(opts serveOptions) error {
 	cfg, err := loadServeConfig(opts)
 	if err != nil {
