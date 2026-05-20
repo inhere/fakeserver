@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -126,6 +127,39 @@ func LoadEnvFile(path, envName string) (envMap map[string]any, active string, er
 	}
 
 	return envMap, target, nil
+}
+
+// ExtractEnvNames 返回 path 指向的 env 文件中所有可选 env 段名（按字母序，
+// 排除 `$default` / `$active` 元字段）。供 v0.3 项目注册时填充
+// Project.Envs 字段使用（design §10.2）。
+//
+// 容错策略（与 LoadEnvFile 对齐）：文件不存在 / 解析失败 / root 非 object
+// 均返回 nil（不报错）——envs 字段是辅助信息，不应阻塞 serve 启动。
+func ExtractEnvNames(path string) []string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return nil
+	}
+	raw, err := loadFile(abs)
+	if err != nil {
+		return nil
+	}
+	root, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(root))
+	for k := range root {
+		if k == "$default" || k == "$active" {
+			continue
+		}
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // rejectIncludesInEnvFile walks the root map and errors on any string

@@ -237,11 +237,13 @@ func runServe(opts serveOptions) error {
 		projID := registry.ProjectID(mainCfg)
 		cwd, _ := os.Getwd()
 		pidPath = filepath.Join(cwd, ".fakeserver", "run.pid")
+		envFilePath := filepath.Join(filepath.Dir(mainCfg), config.DefaultEnvFileName)
 		proj := registry.Project{
 			ID:         projID,
 			Name:       filepath.Base(filepath.Dir(mainCfg)),
 			ConfigPath: mainCfg,
 			CWD:        cwd,
+			Envs:       config.ExtractEnvNames(envFilePath),
 			LastEnv:    opts.EnvName,
 			LastPort:   opts.Port,
 			LastRunAt:  time.Now().UTC(),

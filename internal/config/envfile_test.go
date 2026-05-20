@@ -224,3 +224,50 @@ func TestLoadEnvFile_ActiveFieldPointsToMissingSegment(t *testing.T) {
 		t.Errorf("error should reference $active; got %v", err)
 	}
 }
+
+func TestExtractEnvNames_MultiEnv(t *testing.T) {
+	got := ExtractEnvNames("testdata/env/multi-env.json5")
+	want := []string{"dev", "staging"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("got[%d]=%q want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestExtractEnvNames_WithActive_ExcludesMetaFields(t *testing.T) {
+	got := ExtractEnvNames("testdata/env/with-active.json5")
+	want := []string{"dev", "staging"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for _, name := range got {
+		if name == "$default" || name == "$active" {
+			t.Errorf("meta field %q leaked into result", name)
+		}
+	}
+}
+
+func TestExtractEnvNames_DefaultOnly_ReturnsEmpty(t *testing.T) {
+	got := ExtractEnvNames("testdata/env/default-only.json5")
+	if len(got) != 0 {
+		t.Errorf("default-only should yield no env names; got %v", got)
+	}
+}
+
+func TestExtractEnvNames_NonexistentFile_ReturnsNil(t *testing.T) {
+	got := ExtractEnvNames("/no/such/file.json5")
+	if got != nil {
+		t.Errorf("nonexistent file should return nil; got %v", got)
+	}
+}
+
+func TestExtractEnvNames_RootNotObject_ReturnsNil(t *testing.T) {
+	got := ExtractEnvNames("testdata/env/root-array.json5")
+	if got != nil {
+		t.Errorf("root array should return nil; got %v", got)
+	}
+}
