@@ -38,7 +38,7 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 			for ci, c := range route.Cases {
 				m, err := CompileMatcher(c.When)
 				if err != nil {
-					return fmt.Errorf("route[%d] %s %s: %w", i, strings.Join(route.Method, ","), route.Path, err)
+					return fmt.Errorf("routes[%d] (%s %s): %w", i, strings.Join(route.Method, ","), route.Path, err)
 				}
 				matchers[ci] = m
 			}

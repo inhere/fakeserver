@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gookit/rux/v2"
@@ -192,5 +193,11 @@ func TestMount_CasesCompileError(t *testing.T) {
 	err := Mount(r, cfg, rdr)
 	if err == nil {
 		t.Fatal("Mount should error on bad when (Validate normally catches this; defense-in-depth)")
+	}
+	if !strings.Contains(err.Error(), "routes[0]") {
+		t.Errorf("error should include route position; got %v", err)
+	}
+	if !strings.Contains(err.Error(), "when") {
+		t.Errorf("error should mention 'when'; got %v", err)
 	}
 }

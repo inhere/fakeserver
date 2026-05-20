@@ -193,3 +193,41 @@ func anyErrContains(errs []error, sub string) bool {
 	}
 	return false
 }
+
+func TestWarn_ProxyTargetPrivateHost(t *testing.T) {
+	tests := []struct {
+		name       string
+		target     string
+		expectWarn bool
+	}{
+		{"localhost", "http://localhost:8080", true},
+		{"127.0.0.1", "http://127.0.0.1:8080", true},
+		{"192.168.x", "http://192.168.1.10:8080", true},
+		{"10.x", "http://10.0.0.1:8080", true},
+		{"172.16-31 lower", "http://172.16.0.1:8080", true},
+		{"172.16-31 upper", "http://172.31.255.254:8080", true},
+		{"172 outside range", "http://172.32.0.1:8080", false},
+		{"public", "http://api.example.com:8080", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Fallback: "echo",
+				Routes: []Route{{
+					Method: []string{"*"}, Path: "/api/*rest",
+					Proxy:  &ProxyConfig{Target: tt.target},
+				}},
+			}
+			warns := Warn(cfg)
+			hasPrivateWarn := false
+			for _, w := range warns {
+				if strings.Contains(w, "private") || strings.Contains(w, "localhost") {
+					hasPrivateWarn = true
+				}
+			}
+			if hasPrivateWarn != tt.expectWarn {
+				t.Errorf("target=%q expected warn=%v, got warns=%v", tt.target, tt.expectWarn, warns)
+			}
+		})
+	}
+}
