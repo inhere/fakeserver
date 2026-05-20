@@ -32,7 +32,7 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
-| **1** | `internal/recorder` 包（环形缓冲 + Append/Snapshot）+ middleware logger 接入 + `webui/api.go` 3 个 JSON 端点（projects/config/history）+ adminEnabled 安全护栏 | `internal/recorder/` + `internal/webui/{mount,api}.go` + middleware/logger 改造 | — | v0.3 | ~500 行 | ✅ 已完成 (commit 64bdf5a..7b4b7b9) |
+| **1** | `internal/recorder` 包（环形缓冲 + Append/Snapshot）+ middleware logger 接入 + `webui/api.go` 3 个 JSON 端点（projects/config/history）+ adminEnabled 安全护栏 | `internal/recorder/` + `internal/webui/{mount,api}.go` + middleware/logger 改造 | — | v0.3 | ~500 行 | ✅ 已完成 (commit 64bdf5a..38ff74a) |
 | **2** | SSE 实时推送 `/__fakeserver/events` + recorder.Subscribe 多订阅 + 心跳 15s + 慢客户端非阻塞丢包 | `internal/webui/sse.go` + recorder Subscribe/Unsubscribe | — | Phase 1 | ~300 行 | 待开始 |
 | **3** | embed 静态资源 + 4 个 UI 页面（侧栏项目列表 / 路由 / 历史 / 配置）+ 极简 HTML/CSS/JS + 综合 E2E + 文档收尾 | `internal/webui/assets/` + page handlers + v0.4 milestone 闭环 | — | Phase 2 | ~600 行 | 待开始 |
 
@@ -124,7 +124,7 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 - Task 2: `160e8b2` (middleware.Logger 加 ring 参数)
 - Task 3: `428afd4` (webui.Mount + 3 JSON 端点 + 脱敏)
 - Task 4: `7b4b7b9` (serve.go 接入 + AdminEnabled *bool + 0.0.0.0 警告 + catch-all 404)
-- Task 5: 文档收尾（本次 commit）
+- Task 5: `38ff74a` (文档收尾 + design §13)
 
 ---
 
