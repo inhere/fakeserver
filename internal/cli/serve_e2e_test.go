@@ -64,7 +64,7 @@ func TestServe_v01_MVPClosure(t *testing.T) {
 	rdr := tpl.NewRenderer(cfg.Globals, cfg.Server.OSEnvWhitelist, cfg.Server.FakerSeed)
 	opts := serveOptions{Quiet: true, NoCORS: true, NoWatch: false}
 
-	holder := newHolderWithWatcher(t, cfg, rdr, opts, cfgPath)
+	holder := newHolderWithWatcher(t, cfg, rdr, opts, cfgPath, "")
 	srv := httptest.NewServer(holder)
 	defer srv.Close()
 
@@ -151,14 +151,54 @@ func waitForRouteBody(t *testing.T, url, wantSubstr string, budget time.Duration
 	return false
 }
 
+// TestServe_v02_EnvFile_HotReload 是 Phase 2 DoD #8：env 文件 hot-reload E2E。
+//
+// 写主配置（含 {{ .env.token }} 模板）+ env 文件（dev 段 token=DEV），启动
+// fakeserver，验证初始值为 "DEV"，然后修改 env 文件将 token 改为 "DEV2"，
+// 等待 watcher 防抖窗口结束 + holder swap，验证新值生效。
+func TestServe_v02_EnvFile_HotReload(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "fakeserver.json5")
+	envPath := filepath.Join(tmp, "fakeserver.env.json5")
+	_ = os.WriteFile(cfgPath, []byte(`{ routes: [{ method: "GET", path: "/t", body: "{{ .env.token }}" }] }`), 0644)
+	_ = os.WriteFile(envPath, []byte(`{ dev: { token: "DEV" } }`), 0644)
+
+	cfg, err := config.Load([]string{cfgPath}, "dev", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errs := config.Validate(cfg); len(errs) > 0 {
+		t.Fatalf("%v", errs)
+	}
+	rdr := tpl.NewRenderer(cfg.Globals, cfg.Server.OSEnvWhitelist, cfg.Server.FakerSeed)
+	holder := newHolderWithWatcher(t, cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, cfgPath, "dev")
+	srv := httptest.NewServer(holder)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(b) != "DEV" {
+		t.Errorf("initial body=%q want DEV", string(b))
+	}
+
+	_ = os.WriteFile(envPath, []byte(`{ dev: { token: "DEV2" } }`), 0644)
+	if !waitForRouteBody(t, srv.URL+"/t", "DEV2", 2*time.Second) {
+		t.Fatal("new env value never appeared after edit")
+	}
+}
+
 // newHolderWithWatcher 模拟 runServe 的 holder + watcher 装配（只是不起 HTTP
-// server，由 httptest 接管）。
-func newHolderWithWatcher(t *testing.T, cfg *config.Config, rdr tpl.Renderer, opts serveOptions, cfgPath string) http.Handler {
+// server，由 httptest 接管）。envName 传 "" 表示按 $active/首段自动选择。
+func newHolderWithWatcher(t *testing.T, cfg *config.Config, rdr tpl.Renderer, opts serveOptions, cfgPath string, envName string) http.Handler {
 	t.Helper()
 	holder := middleware.NewHolder()
 	holder.Swap(assembleHandler(cfg, rdr, opts))
 	watcher, err := config.NewWatcher(cfg.SourcePaths, 300*time.Millisecond, func() {
-		newCfg, lerr := config.Load([]string{cfgPath}, "", nil)
+		newCfg, lerr := config.Load([]string{cfgPath}, envName, nil)
 		if lerr != nil {
 			t.Logf("reload load err: %v", lerr)
 			return
