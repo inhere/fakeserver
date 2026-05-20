@@ -34,7 +34,7 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
 | **1** | `internal/registry` 包（projects.json 读写 + 跨进程文件锁 + PID 文件）+ serve 启动期 Upsert | `internal/registry/{store,lock,pid}.go` + `internal/cli/serve.go` 接入 | `github.com/gofrs/flock v0.13.0`（Task 1 spike 决策）| v0.2 | ~600 行 | ✅ 已完成 (commit 9dba198..644b9e9) |
-| **2** | `fakeserver list / use` 子命令 + envs 提取 + 进程探活 + 综合 E2E + docs 回写 | `internal/cli/{list,use}.go` + registry 探活接口 + envs 提取助手 | — | Phase 1 | ~500 行 | ✅ 已完成 (commit 0e7277e..7227a23) |
+| **2** | `fakeserver list / use` 子命令 + envs 提取 + 进程探活 + 综合 E2E + docs 回写 | `internal/cli/{list,use}.go` + registry 探活接口 + envs 提取助手 | — | Phase 1 | ~500 行 | ✅ 已完成 (commit 0e7277e..96c9b11) |
 
 总计：v0.3 ≈ 1100 行代码（含测试），分 2 期落地。
 
@@ -200,7 +200,7 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 - Task 3: `0db3225` (use 子命令)
 - Task 4: `95c3448` (跨进程并发 E2E)
 - Task 5: `7227a23` (综合 E2E)
-- Task 6: 文档收尾（本次 commit）
+- Task 6: `96c9b11` (文档收尾 + design §13)
 
 ---
 
@@ -211,7 +211,7 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 | Phase | 提交范围 | 主要交付 |
 |---|---|---|
 | Phase 1 | `9dba198..af19a16` | registry 包（store/lock/pid）+ serve 启动期 Upsert + PID 文件 |
-| Phase 2 | `0e7277e..7227a23` | envs 提取 + list/use 子命令 + 跨进程并发 E2E + 综合 E2E |
+| Phase 2 | `0e7277e..96c9b11` | envs 提取 + list/use 子命令 + 跨进程并发 E2E + 综合 E2E |
 
 新增第三方依赖：`github.com/gofrs/flock v0.13.0`（跨平台文件锁）。
 
