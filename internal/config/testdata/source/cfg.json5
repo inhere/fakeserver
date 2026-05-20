@@ -1,0 +1,5 @@
+{
+  routes: [
+    { method: "GET", path: "/file", bodyFile: "data.txt" },
+  ],
+}

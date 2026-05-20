@@ -261,3 +261,70 @@ func TestLoadDefault_NoneExistReturnsNilNilNoError(t *testing.T) {
 		t.Errorf("expected nil cfg (echo-only fallback), got %+v", cfg)
 	}
 }
+
+func TestLoad_RouteSourceFile_Populated(t *testing.T) {
+	// /tmp/<X>/cfg.json5 with one route → cfg.Routes[0].SourceFile
+	// must be the absolute path to cfg.json5
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	body := `{
+		routes: [
+			{ method: "GET", path: "/x", body: "ok" },
+		],
+	}`
+	if err := os.WriteFile(cfgPath, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load([]string{cfgPath}, "", nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(cfg.Routes))
+	}
+	want := cfgPath
+	got := cfg.Routes[0].SourceFile
+	if filepath.Clean(got) != filepath.Clean(want) {
+		t.Errorf("SourceFile = %q, want %q", got, want)
+	}
+}
+
+func TestLoad_RouteSourceFile_FromInclude(t *testing.T) {
+	tmp := t.TempDir()
+	subDir := filepath.Join(tmp, "routes")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	subPath := filepath.Join(subDir, "users.json5")
+	subBody := `[
+		{ method: "GET", path: "/u", body: "user-route" },
+	]`
+	if err := os.WriteFile(subPath, []byte(subBody), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	cfgBody := `{
+		routes: [
+			{ method: "GET", path: "/main", body: "main-route" },
+			"@routes/users.json5",
+		],
+	}`
+	if err := os.WriteFile(cfgPath, []byte(cfgBody), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load([]string{cfgPath}, "", nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Routes) != 2 {
+		t.Fatalf("expected 2 routes, got %d", len(cfg.Routes))
+	}
+	if filepath.Clean(cfg.Routes[0].SourceFile) != filepath.Clean(cfgPath) {
+		t.Errorf("Routes[0] (/main) SourceFile = %q, want %q",
+			cfg.Routes[0].SourceFile, cfgPath)
+	}
+	if filepath.Clean(cfg.Routes[1].SourceFile) != filepath.Clean(subPath) {
+		t.Errorf("Routes[1] (/u) SourceFile = %q, want %q",
+			cfg.Routes[1].SourceFile, subPath)
+	}
+}

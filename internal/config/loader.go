@@ -48,6 +48,7 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 		if !ok {
 			return nil, fmt.Errorf("config %q: root must be an object", abs)
 		}
+		annotateRoutesWithSource(rawMap, abs) // v0.2 lite-tools-gko
 		visiting := map[string]bool{abs: true}
 		expanded, err := expandIncludes(any(rawMap), filepath.Dir(abs), visiting)
 		if err != nil {
@@ -63,11 +64,18 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 
 	merged := mergeMaps(raws)
 
-	cfg, err := mapToConfig(merged)
+	cfg, routeSources, err := mapToConfig(merged)
 	if err != nil {
 		return nil, err
 	}
 	cfg.SourcePaths = absSources
+	// v0.2 lite-tools-gko: zip per-route source file back into the
+	// struct (lost during the JSON round-trip due to json:"-" tag).
+	for i := range cfg.Routes {
+		if i < len(routeSources) && routeSources[i] != "" {
+			cfg.Routes[i].SourceFile = routeSources[i]
+		}
+	}
 	applyDefaults(cfg)
 	return cfg, nil
 }
@@ -140,20 +148,68 @@ func deepMerge(left, right map[string]any) map[string]any {
 	return out
 }
 
+// annotateRoutesWithSource walks node and tags every route-shaped map
+// with a `__source_file__` sentinel key pointing to sourceFile. This
+// preserves the per-route origin file path across mapToConfig's JSON
+// round-trip — mapToConfig extracts and clears the sentinel before
+// running encoding/json, then Load zips routeSources into Route.SourceFile.
+//
+// Recognizes three shapes:
+//   - map[string]any with a "routes" []any → annotate each map element of routes
+//   - []any → annotate each map element (each is a route)
+//   - map[string]any without "routes" → annotate self (single-route include)
+//
+// Only sets the sentinel if not already present, so the deepest (most
+// specific) source file wins for nested includes.
+func annotateRoutesWithSource(node any, sourceFile string) {
+	switch v := node.(type) {
+	case map[string]any:
+		if routes, ok := v["routes"].([]any); ok {
+			for _, r := range routes {
+				if rm, ok := r.(map[string]any); ok {
+					if _, set := rm["__source_file__"]; !set {
+						rm["__source_file__"] = sourceFile
+					}
+				}
+			}
+			return
+		}
+		// Single-route map (from a one-route @include file)
+		if _, set := v["__source_file__"]; !set {
+			v["__source_file__"] = sourceFile
+		}
+	case []any:
+		for _, r := range v {
+			if rm, ok := r.(map[string]any); ok {
+				if _, set := rm["__source_file__"]; !set {
+					rm["__source_file__"] = sourceFile
+				}
+			}
+		}
+	}
+}
+
 // mapToConfig converts the raw merged map into a strongly-typed *Config.
 // We round-trip through encoding/json to leverage struct tags: titanous/json5
 // already produced standard Go map/slice/primitive types, so a JSON
 // re-encode is lossless. Custom normalization (Route.Method may be string
 // or []string) happens after.
-func mapToConfig(m map[string]any) (*Config, error) {
-	// Normalize Route.Method shapes before re-encoding: JSON's struct tags
-	// can't natively accept "string OR []string", so we coerce in-place.
+// Returns the config and a parallel slice of per-route source file paths
+// (extracted from the __source_file__ sentinel before the JSON round-trip).
+func mapToConfig(m map[string]any) (*Config, []string, error) {
+	var routeSources []string
 	if routes, ok := m["routes"].([]any); ok {
+		routeSources = make([]string, len(routes))
 		for i, r := range routes {
 			rm, ok := r.(map[string]any)
 			if !ok {
 				continue
 			}
+			if sf, ok := rm["__source_file__"].(string); ok {
+				routeSources[i] = sf
+				delete(rm, "__source_file__")
+			}
+			// Method shape normalization (preserve Phase 2 logic)
 			method := rm["method"]
 			switch v := method.(type) {
 			case string:
@@ -163,20 +219,20 @@ func mapToConfig(m map[string]any) (*Config, error) {
 			case []any:
 				// already normalized
 			default:
-				return nil, fmt.Errorf("routes[%d].method: unsupported type %T", i, v)
+				return nil, nil, fmt.Errorf("routes[%d].method: unsupported type %T", i, v)
 			}
 		}
 	}
 
 	buf, err := json.Marshal(m)
 	if err != nil {
-		return nil, fmt.Errorf("re-encode to JSON: %w", err)
+		return nil, nil, fmt.Errorf("re-encode to JSON: %w", err)
 	}
 	cfg := &Config{}
 	if err := json.Unmarshal(buf, cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal to Config: %w", err)
+		return nil, nil, fmt.Errorf("unmarshal to Config: %w", err)
 	}
-	return cfg, nil
+	return cfg, routeSources, nil
 }
 
 // expandIncludes walks the JSON5-decoded map, replacing any string value
@@ -283,6 +339,7 @@ func resolveInclude(spec, baseDir string, visiting map[string]bool) (any, error)
 		if err != nil {
 			return nil, err
 		}
+		annotateRoutesWithSource(raw, p) // v0.2 lite-tools-gko
 
 		// Recurse into the loaded content
 		visiting[p] = true

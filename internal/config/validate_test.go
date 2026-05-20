@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -229,5 +231,34 @@ func TestWarn_ProxyTargetPrivateHost(t *testing.T) {
 				t.Errorf("target=%q expected warn=%v, got warns=%v", tt.target, tt.expectWarn, warns)
 			}
 		})
+	}
+}
+
+func TestLoad_BodyFileRelativePath_ResolvedAgainstConfigDir(t *testing.T) {
+	// Repro for lite-tools-gko: bodyFile relative path should resolve to
+	// the config file's directory, not the CWD. Verify by chdir'ing
+	// elsewhere before Load.
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+
+	cfgPath, _ := filepath.Abs("testdata/source/cfg.json5")
+	otherDir := t.TempDir()
+	if err := os.Chdir(otherDir); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load([]string{cfgPath}, "", nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if errs := Validate(cfg); len(errs) > 0 {
+		// Pre-fix this would fail because resolveRoutePath would look
+		// for data.txt in otherDir (CWD), not testdata/source/.
+		t.Fatalf("validate: %v", errs)
+	}
+	want := filepath.Clean(cfgPath)
+	got := filepath.Clean(cfg.Routes[0].SourceFile)
+	if want != got {
+		t.Errorf("SourceFile = %q, want %q", got, want)
 	}
 }
