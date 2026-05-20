@@ -185,7 +185,7 @@
 
 ### Phase 4 — 多响应 + 条件分支 + Proxy
 
-**详细计划**：`phase4-advanced-proxy.md`（待生成）
+**详细计划**：[phase4-advanced-proxy.md](2026-05-19-fakeserver-v0.1-phase4-advanced-proxy.md)
 
 **目标**：mock 路由支持 `cases` 多响应（四种 strategy）与 `when` 条件分支；route 出现 `proxy` 字段时改走反向代理。
 
