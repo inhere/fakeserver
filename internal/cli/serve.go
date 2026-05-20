@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/inhere/fakeserver/internal/middleware"
 	"github.com/inhere/fakeserver/internal/mock"
 	"github.com/inhere/fakeserver/internal/proxy"
+	"github.com/inhere/fakeserver/internal/registry"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
@@ -226,6 +228,46 @@ func runServe(opts serveOptions) error {
 	}
 
 	addr := fmt.Sprintf("%s:%d", opts.Host, opts.Port)
+
+	// v0.3：注册当前项目 + 写 PID 文件（失败不阻塞 serve）。
+	// 仅当有主配置文件时注册（echo-only 模式跳过）；end-to-end 路径见 design §10。
+	var pidPath string
+	if cfg != nil && len(cfg.SourcePaths) > 0 {
+		mainCfg := cfg.SourcePaths[0]
+		projID := registry.ProjectID(mainCfg)
+		cwd, _ := os.Getwd()
+		pidPath = filepath.Join(cwd, ".fakeserver", "run.pid")
+		proj := registry.Project{
+			ID:         projID,
+			Name:       filepath.Base(filepath.Dir(mainCfg)),
+			ConfigPath: mainCfg,
+			CWD:        cwd,
+			LastEnv:    opts.EnvName,
+			LastPort:   opts.Port,
+			LastRunAt:  time.Now().UTC(),
+			PIDFile:    pidPath,
+		}
+		regPath := userRegistryPath()
+		if rerr := registry.WithLock(regPath+".lock", func() error {
+			reg, lerr := registry.Load(regPath)
+			if lerr != nil {
+				return lerr
+			}
+			registry.Upsert(reg, proj)
+			return registry.Save(regPath, reg)
+		}); rerr != nil {
+			fmt.Fprintf(os.Stderr, "warn: registry write failed: %v\n", rerr)
+		}
+		if werr := registry.WritePIDFile(pidPath, os.Getpid(), opts.Port, proj.LastRunAt); werr != nil {
+			fmt.Fprintf(os.Stderr, "warn: write pid file %s: %v\n", pidPath, werr)
+		}
+		defer func() {
+			if err := registry.RemovePIDFile(pidPath); err != nil {
+				fmt.Fprintf(os.Stderr, "warn: remove pid file %s: %v\n", pidPath, err)
+			}
+		}()
+	}
+
 	var (
 		globals map[string]any
 		osenvWl []string
@@ -304,6 +346,18 @@ func runServe(opts serveOptions) error {
 // returning "v0.1.0"; cmd/fakeserver/main.go can override via ldflags.
 func version() string {
 	return "v0.1.0"
+}
+
+// userRegistryPath 返回 ~/.config/fakeserver/projects.json 的绝对路径。
+// design §10.1：跨平台统一用 ~/.config（Windows 不走 %APPDATA%）。
+// HomeDir 解析失败时回退到当前目录下的 ".fakeserver/projects.json"，仅 warn。
+func userRegistryPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: UserHomeDir: %v; using cwd-local registry\n", err)
+		return filepath.Join(".fakeserver", "projects.json")
+	}
+	return filepath.Join(home, ".config", "fakeserver", "projects.json")
 }
 
 // parseVarOverrides converts ["a=1,b=2", "c=3"] → map[string]string.
