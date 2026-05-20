@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -125,5 +128,46 @@ func TestLoadEnvFile_EnvNameNotFound(t *testing.T) {
 	_, _, err := LoadEnvFile("testdata/env/multi-env.json5", "production")
 	if err == nil {
 		t.Fatal("envName='production' not in file → expected error")
+	}
+}
+
+func TestLoadEnvFile_BadDefaultType(t *testing.T) {
+	_, _, err := LoadEnvFile("testdata/env/bad-default-type.json5", "dev")
+	if err == nil {
+		t.Fatal("$default as string → expected error")
+	}
+	if !strings.Contains(err.Error(), "$default") {
+		t.Errorf("error should mention $default; got %v", err)
+	}
+}
+
+func TestLoadEnvFile_BadActiveType(t *testing.T) {
+	_, _, err := LoadEnvFile("testdata/env/bad-active-type.json5", "")
+	if err == nil {
+		t.Fatal("$active as number → expected error")
+	}
+	if !strings.Contains(err.Error(), "$active") {
+		t.Errorf("error should mention $active; got %v", err)
+	}
+}
+
+// TestLoadEnvFile_ActiveFieldPointsToMissingSegment 锁定 $active 指向不存在
+// segment 时的错误消息含 $active 上下文。
+func TestLoadEnvFile_ActiveFieldPointsToMissingSegment(t *testing.T) {
+	tmp := t.TempDir()
+	fp := filepath.Join(tmp, "bad-active.env.json5")
+	body := `{
+		$active: "nonexistent",
+		dev: { x: 1 },
+	}`
+	if err := os.WriteFile(fp, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := LoadEnvFile(fp, "")
+	if err == nil {
+		t.Fatal("$active=nonexistent → expected error")
+	}
+	if !strings.Contains(err.Error(), "$active") {
+		t.Errorf("error should reference $active; got %v", err)
 	}
 }

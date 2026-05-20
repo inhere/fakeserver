@@ -1,0 +1,6 @@
+{
+  $default: "this should be an object",
+  dev: {
+    apiHost: "x",
+  },
+}

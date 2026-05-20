@@ -1,0 +1,6 @@
+{
+  $active: 123,
+  dev: {
+    apiHost: "x",
+  },
+}

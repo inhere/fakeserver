@@ -62,22 +62,44 @@ func LoadEnvFile(path, envName string) (envMap map[string]any, active string, er
 		return nil, "", ierr
 	}
 
-	// Extract $default and meta $active; everything else is a candidate segment.
-	defaults, _ := rootMap["$default"].(map[string]any)
-	activeMeta, _ := rootMap["$active"].(string)
+	// Extract and validate $default (must be a map if present)
+	var defaults map[string]any
+	if raw, present := rootMap["$default"]; present {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return nil, "", fmt.Errorf("env file %q: $default must be an object, got %T", abs, raw)
+		}
+		defaults = m
+	}
 
-	// Determine target segment.
+	// Extract and validate $active (must be a string if present)
+	var activeMeta string
+	if raw, present := rootMap["$active"]; present {
+		s, ok := raw.(string)
+		if !ok {
+			return nil, "", fmt.Errorf("env file %q: $active must be a string, got %T", abs, raw)
+		}
+		activeMeta = s
+	}
+
+	// Determine target segment + remember its source for error messages.
 	target := envName
-	if target == "" {
+	targetSource := "envName arg"
+	if target == "" && activeMeta != "" {
 		target = activeMeta
+		targetSource = "$active field"
 	}
 	if target == "" {
 		// Find first non-$default/$active segment by iteration order.
+		// NOTE: Go map iteration is randomized — "first segment" is
+		// non-deterministic when multiple non-meta keys exist. Users who
+		// need a stable default should set $active explicitly.
 		for k := range rootMap {
 			if k == "$default" || k == "$active" {
 				continue
 			}
 			target = k
+			targetSource = "first non-$default segment"
 			break
 		}
 	}
@@ -86,9 +108,13 @@ func LoadEnvFile(path, envName string) (envMap map[string]any, active string, er
 		return envMap, "", nil
 	}
 
-	chosen, ok := rootMap[target].(map[string]any)
+	raw, present := rootMap[target]
+	if !present {
+		return nil, "", fmt.Errorf("env file %q: segment %q not found (selected via %s)", abs, target, targetSource)
+	}
+	chosen, ok := raw.(map[string]any)
 	if !ok {
-		return nil, "", fmt.Errorf("env file %q: segment %q not found or not an object", abs, target)
+		return nil, "", fmt.Errorf("env file %q: segment %q must be an object, got %T (selected via %s)", abs, target, raw, targetSource)
 	}
 
 	// Deep-merge $default into chosen segment (chosen wins on conflict).
