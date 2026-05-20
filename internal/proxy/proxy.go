@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -130,7 +131,7 @@ func Build(route *config.Route, renderer tpl.Renderer) (rux.HandlerFunc, error) 
 				for k, v := range p.Headers {
 					rendered, rerr := renderer.Render(v, ctx)
 					if rerr != nil {
-						// Drop the header on render error rather than crashing the request.
+						log.Printf("[proxy] %s header %q render err: %v (dropping)", route.Path, k, rerr)
 						continue
 					}
 					req.Header.Set(k, rendered)
@@ -145,6 +146,7 @@ func Build(route *config.Route, renderer tpl.Renderer) (rux.HandlerFunc, error) 
 			for k, v := range p.ResponseHeaders {
 				rendered, rerr := renderer.Render(v, ctx)
 				if rerr != nil {
+					log.Printf("[proxy] %s response-header %q render err: %v (dropping)", route.Path, k, rerr)
 					continue
 				}
 				resp.Header.Set(k, rendered)
@@ -194,9 +196,17 @@ func Build(route *config.Route, renderer tpl.Renderer) (rux.HandlerFunc, error) 
 	}, nil
 }
 
-// buildProxyRenderCtx builds a lightweight template context from the request
-// without consuming req.Body. Only method/path/headers/host/query are
-// populated — sufficient for header injection templates (design §9.2).
+// buildProxyRenderCtx constructs a minimal template render context for
+// proxy header injection. Unlike tpl.BuildRenderCtx, this does NOT drain
+// req.Body (which would corrupt forwarding).
+//
+// Deliberately omitted keys (vs production BuildRenderCtx):
+//   - body / bodyRaw: would require draining req.Body
+//   - params:        rux path params aren't accessible at Director time
+//                    (Director runs after rux handed off the request)
+//
+// Templates referencing those keys will get nil → empty string. Users who
+// need request body in header injection should switch to a mock route.
 func buildProxyRenderCtx(req *http.Request) map[string]any {
 	headers := make(map[string]string, len(req.Header))
 	for k, vs := range req.Header {
@@ -218,6 +228,7 @@ func buildProxyRenderCtx(req *http.Request) map[string]any {
 			"path":    req.URL.Path,
 			"proto":   req.Proto,
 			"host":    req.Host,
+			"ip":      proxyClientIP(req),
 			"query":   query,
 			"headers": headers,
 		},
@@ -228,10 +239,34 @@ func buildProxyRenderCtx(req *http.Request) map[string]any {
 	}
 }
 
+// proxyClientIP extracts the client IP from the request, using the same
+// heuristic as tpl.clientIP but inlined to avoid coupling internal packages.
+// Priority: X-Forwarded-For (first value) → X-Real-Ip → RemoteAddr (port stripped).
+func proxyClientIP(req *http.Request) string {
+	if v := req.Header.Get("X-Forwarded-For"); v != "" {
+		if i := strings.Index(v, ","); i >= 0 {
+			return strings.TrimSpace(v[:i])
+		}
+		return strings.TrimSpace(v)
+	}
+	if v := req.Header.Get("X-Real-Ip"); v != "" {
+		return v
+	}
+	host := req.RemoteAddr
+	if i := strings.LastIndex(host, ":"); i >= 0 {
+		host = host[:i]
+	}
+	return host
+}
+
 // readUpTo reads from r into buf. Returns (n, nil) when r ends within
 // len(buf) bytes; returns (n, err) when there's MORE data beyond buf —
 // signaling the caller "body exceeded the limit".
 func readUpTo(r io.ReadCloser, buf []byte) (int, error) {
+	// Close the original body once. The caller will reinstall a new
+	// io.NopCloser(bytes.NewReader(...)) on the request before passing
+	// to ReverseProxy, so double-close is not a concern — the original
+	// is owned by us at this point.
 	defer r.Close()
 	total := 0
 	for total < len(buf) {
@@ -280,6 +315,16 @@ func parseByteSize(s string) (int64, error) {
 	for _, u := range units {
 		if strings.HasSuffix(s, u.suffix) {
 			numStr := strings.TrimSpace(strings.TrimSuffix(s, u.suffix))
+			// Require numStr to be entirely digits so "16XB" doesn't
+			// sneak through via Sscanf's partial-scan behaviour.
+			for _, ch := range numStr {
+				if ch < '0' || ch > '9' {
+					return 0, fmt.Errorf("byte size %q: non-numeric prefix %q before suffix %q", s, numStr, u.suffix)
+				}
+			}
+			if numStr == "" {
+				return 0, fmt.Errorf("byte size %q: missing numeric value before suffix %q", s, u.suffix)
+			}
 			var n int64
 			_, err := fmt.Sscanf(numStr, "%d", &n)
 			if err != nil {
@@ -288,7 +333,12 @@ func parseByteSize(s string) (int64, error) {
 			return n * u.mult, nil
 		}
 	}
-	// No suffix → treat as bare bytes
+	// No suffix matched: require the whole string be digits.
+	for _, ch := range s {
+		if ch < '0' || ch > '9' {
+			return 0, fmt.Errorf("byte size %q: invalid characters (only uppercase B/KB/MB/GB/TB and KiB/MiB/GiB/TiB suffixes recognized)", s)
+		}
+	}
 	var n int64
 	_, err := fmt.Sscanf(s, "%d", &n)
 	if err != nil {

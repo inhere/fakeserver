@@ -325,3 +325,60 @@ func TestProxy_PreserveHost(t *testing.T) {
 		t.Errorf("preserveHost: upstream saw Host=%q want %q", sawHost, want)
 	}
 }
+
+func TestProxy_BodyLimit_ExactlyAtLimit(t *testing.T) {
+	upstream := echoUpstream(t)
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"POST"}, Path: "/x",
+			Proxy:  &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	// exactly 16 bytes — must pass through (not 413)
+	body := strings.Repeat("a", 16)
+	resp, err := http.Post(srv.URL+"/x", "text/plain", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("exact-limit body should be forwarded; got status %d", resp.StatusCode)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	if !strings.HasSuffix(string(b), ":"+body) {
+		t.Errorf("upstream received body=%q (truncated?)", string(b))
+	}
+}
+
+func TestParseByteSize(t *testing.T) {
+	tests := []struct {
+		in   string
+		want int64
+		err  bool
+	}{
+		{"16", 16, false},
+		{"16B", 16, false},
+		{"1KB", 1000, false},
+		{"1KiB", 1024, false},
+		{"10MiB", 10 * 1024 * 1024, false},
+		{"16b", 0, true},  // lowercase rejected
+		{"16XB", 0, true}, // unknown suffix
+		{"", 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			got, err := parseByteSize(tt.in)
+			if (err != nil) != tt.err {
+				t.Errorf("err=%v want err=%v", err, tt.err)
+			}
+			if !tt.err && got != tt.want {
+				t.Errorf("got %d want %d", got, tt.want)
+			}
+		})
+	}
+}
