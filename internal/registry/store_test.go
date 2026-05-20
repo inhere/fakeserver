@@ -123,6 +123,22 @@ func TestUpsert_AddsNewAndReplacesExisting(t *testing.T) {
 	}
 }
 
+// TestSave_ParentIsFile_ReturnsMkdirErr 验证当 path 父目录位置已经是文件时
+// Save 应返回 mkdir 错误（而非 panic）。
+func TestSave_ParentIsFile_ReturnsMkdirErr(t *testing.T) {
+	d := t.TempDir()
+	// 在 d 下创建一个文件 "blocker"，然后请求把 projects.json 放到 blocker/ 下
+	blocker := filepath.Join(d, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(blocker, "projects.json")
+	err := Save(target, emptyRegistry())
+	if err == nil {
+		t.Error("expected Save to fail when parent is a regular file")
+	}
+}
+
 func TestRemove_ClearsLastActiveWhenMatched(t *testing.T) {
 	reg := emptyRegistry()
 	Upsert(reg, Project{ID: "a"})

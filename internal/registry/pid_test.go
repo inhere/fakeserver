@@ -35,6 +35,20 @@ func TestRemovePIDFile_NotExist_NoError(t *testing.T) {
 	}
 }
 
+// TestWritePIDFile_ParentIsFile_ReturnsMkdirErr 验证父路径已为文件时 mkdir 失败。
+func TestWritePIDFile_ParentIsFile_ReturnsMkdirErr(t *testing.T) {
+	d := t.TempDir()
+	blocker := filepath.Join(d, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(blocker, "run.pid")
+	err := WritePIDFile(target, 1, 1, time.Now())
+	if err == nil {
+		t.Error("expected error when parent is regular file")
+	}
+}
+
 func TestIsAlive_CurrentProcess_True(t *testing.T) {
 	if !IsAlive(os.Getpid()) {
 		t.Error("IsAlive(os.Getpid()) should be true")
@@ -44,5 +58,32 @@ func TestIsAlive_CurrentProcess_True(t *testing.T) {
 func TestIsAlive_NonExistentPID_False(t *testing.T) {
 	if IsAlive(9999999) {
 		t.Error("IsAlive(9999999) should be false")
+	}
+}
+
+func TestReadPIDFile_NotExist_ReturnsError(t *testing.T) {
+	d := t.TempDir()
+	_, _, _, err := ReadPIDFile(filepath.Join(d, "no-such.pid"))
+	if err == nil {
+		t.Error("expected error for missing pid file")
+	}
+}
+
+func TestReadPIDFile_MalformedContent_ReturnsError(t *testing.T) {
+	cases := map[string]string{
+		"too-few-lines":     "1234\n",
+		"pid-not-numeric":   "abc\n5090\n2026-05-20T10:00:00Z\n",
+		"port-not-numeric":  "1234\nzz\n2026-05-20T10:00:00Z\n",
+		"started-bad-fmt":   "1234\n5090\nnot-a-date\n",
+	}
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			d := t.TempDir()
+			pidPath := filepath.Join(d, "run.pid")
+			_ = os.WriteFile(pidPath, []byte(content), 0600)
+			if _, _, _, err := ReadPIDFile(pidPath); err == nil {
+				t.Errorf("[%s] expected error", name)
+			}
+		})
 	}
 }

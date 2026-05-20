@@ -9,6 +9,7 @@
 | 日期 | 版本 | 作者 | 变更说明 |
 |---|---|---|---|
 | 2026-05-20 | v0.3-overview | inhere | 初稿。固化 v0.3 内部的 2 Phase 拆分（registry/PID + list/use CLI）|
+| 2026-05-20 | v0.3-overview-phase1-applied | inhere | Phase 1 落地：registry 包（store/lock/pid）+ serve 启动期 Upsert + PID 文件 |
 
 后续修订：每完成一个 Phase 后在对应行回写 commit 摘要与实际偏差。
 
@@ -31,7 +32,7 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
-| **1** | `internal/registry` 包（projects.json 读写 + 跨进程文件锁 + PID 文件）+ serve 启动期 Upsert | `internal/registry/{store,lock,pid}.go` + `internal/cli/serve.go` 接入 | `github.com/gofrs/flock v0.13.0`（Task 1 spike 决策）| v0.2 | ~600 行 | 待开始 |
+| **1** | `internal/registry` 包（projects.json 读写 + 跨进程文件锁 + PID 文件）+ serve 启动期 Upsert | `internal/registry/{store,lock,pid}.go` + `internal/cli/serve.go` 接入 | `github.com/gofrs/flock v0.13.0`（Task 1 spike 决策）| v0.2 | ~600 行 | ✅ 已完成 (commit 9dba198..3ac36fe) |
 | **2** | `fakeserver list / use` 子命令 + envs 提取 + 进程探活 + 综合 E2E + docs 回写 | `internal/cli/{list,use}.go` + registry 探活接口 + envs 提取助手 | — | Phase 1 | ~500 行 | 待开始 |
 
 总计：v0.3 ≈ 1100 行代码（含测试），分 2 期落地。
@@ -105,6 +106,24 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 8. 若 Task 1 spike 选 `gofrs/flock`：`go.mod` 增 1 direct dep；`go.sum` 同步；overview 表"新增第三方依赖"列改写
 
 **对 design 章节的映射**：§10.1（路径约定）/ §10.2（文件结构）/ §10.3（并发安全）/ §10.4（PID 文件）→ §10.5（CLI 行为）的"写入侧"前半段。
+
+**实际落地偏差**：
+
+- **gofrs/flock v0.13.0 选型确认**：Task 1 spike 在 Windows 上验证同进程双 flock 实例 TryLock 互斥成立（fd 级锁），可用于跨进程锁 + 同进程 goroutine 互斥。go.mod 增 1 direct dep；indirect 升级 `golang.org/x/sys v0.30.0 → v0.37.0`。
+- **lock 测试拆为两类反映 design §10.3 真实契约**：低竞争（N=5）严格串行 + 高竞争（N=30，临界区 50ms）不阻塞 warn-fallback。原计划"统一一个 goroutine 串行测试"未反映 design "仍失败仅 warn 不阻塞"的语义——直接套大并发会和 fallback 路径冲突。修正测试名为 `TestWithLock_SerializesGoroutines_LowContention` + `TestWithLock_HighContention_DoesNotBlock`。
+- **IsAlive 拆 build-tag**：POSIX `signal(0)` + EPERM 容忍，Windows `FindProcess` 成功即真。两实现死 pid 行为一致（false），EPERM 边界 POSIX 视作 alive、Windows 不区分（成功 = alive）。
+- **集成 E2E 不真起 runServe**：runServe 绑端口 + 阻塞 select 不适合普通 unit test；本 Phase 在 t.TempDir 串联 store/lock/pid 验证三原语协作。真实 runServe 全链路（含信号退出 PID 清理）的 E2E 留 Phase 2 子进程测试。
+- **registry 覆盖率冲到 80.9%**：达 DoD 阈值，但 `Save` 仅 46.4% / `ReadPIDFile` 68.8% 是因为成功路径已覆盖、错误路径主要为 disk-IO 失败/fsync 失败/rename 失败 等难触发场景；补了"父路径已为文件 → mkdir 失败"和"PID 文件字段格式错"用例。
+
+**Phase 1 测试覆盖**：12 个新增用例（store 7 + lock 3 + pid 7 + e2e 1）；`internal/registry` 80.9% (≥80%)；既有 cli/config/tpl 包覆盖率不下降。
+
+**Phase 1 commit 流水**：
+- Task 1: `9dba198` (gofrs/flock 选型 + go.mod)
+- Task 2: `e7cbd46` (store.go)
+- Task 3: `83c4768` (lock.go + 低/高竞争两类测试)
+- Task 4: `42cb84a` (pid.go + IsAlive 跨平台)
+- Task 5: `3ac36fe` (serve.go 接入)
+- Task 6: 集成 E2E + docs 回写（本次 commit）
 
 ---
 

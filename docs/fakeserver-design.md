@@ -18,6 +18,7 @@
 | 2026-05-20 | v0.4-phase0.2.1-applied | inhere | v0.2 Phase 1：env 文件加载（design §8.1/§8.2/§8.3 部分）+ Route.SourceFile 填充修复 |
 | 2026-05-20 | v0.4-phase0.2.2-applied | inhere | v0.2 Phase 2：env 选段 CLI/env-var 优先级链完整 + env 值模板渲染（osenv 白名单贯通）+ mock 模板 .env 接入 + env 文件 hot-reload |
 | 2026-05-20 | v0.4-phase0.2.3-applied | inhere | v0.2 Phase 3：综合 E2E + bodyFile @include 回归 + v0.2 milestone 闭环 |
+| 2026-05-20 | v0.4-phase0.3.1-applied | inhere | v0.3 Phase 1：registry 包（store/lock/pid）+ serve 启动期 Upsert + PID 写读 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1268,6 +1269,12 @@ if seed == 0 {
 1. **v0.2 综合 E2E 闭环**：单测试串联 mock + cases + proxy + bodyFile + dev/staging env 切换 + `--var` override + osenv 白名单阻断 + hot-reload，验证 v0.1 + v0.2 全部模块无回归协作。
 2. **bodyFile 在 @include 链中相对路径稳定**：`@included` 文件中的 route 通过 v0.2 Phase 1 的 SourceFile 修复，bodyFile 解析以**被 include 文件所在目录**为 baseDir，与主 cfg 目录可不同，在任意 CWD 下行为一致。
 3. **v0.2 milestone 闭环**：design §8 (env 文件) + §4.6 (osenv 白名单贯通) + v0.1 backlog (lite-tools-gko) 全部落地，无新增第三方依赖；v0.3 入口（§10 项目注册）已就绪。
+
+### 已落地（v0.3 Phase 1 阶段确认）
+
+1. **registry 包零侵入接入 serve**：projects.json 读写、跨进程文件锁（gofrs/flock）、PID 文件 + IsAlive 探活全部在 `internal/registry` 内部封装；`internal/cli/serve.go` 仅在启动末尾与退出尾段调一次，不耦合具体实现细节。
+2. **失败策略一致 warn-only**：registry / PID 写入失败均仅 stderr warn，不阻塞 serve 启动——mock 功能优先于注册元数据；锁竞争超出 5 次重试退避（10ms~160ms）也走 warn-fallback 而非阻塞。
+3. **PID 文件路径以 CWD 为锚，registry 文件路径以 HOME 为锚**：前者随当前进程工作目录走（不同 CWD 启动 PID 互不冲突）；后者跨进程统一 `~/.config/fakeserver/projects.json`（Windows 也走该路径，不走 `%APPDATA%`），含跨进程文件锁与原子写。
 
 ### 待评审
 
