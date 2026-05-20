@@ -151,6 +151,39 @@ func TestLoadEnvFile_BadActiveType(t *testing.T) {
 	}
 }
 
+func TestLoadEnvFile_RootArray_Rejected(t *testing.T) {
+	_, _, err := LoadEnvFile("testdata/env/root-array.json5", "")
+	if err == nil {
+		t.Fatal("root array → expected error")
+	}
+	if !strings.Contains(err.Error(), "root must be an object") {
+		t.Errorf("error should mention 'root must be an object'; got %v", err)
+	}
+}
+
+func TestLoadEnvFile_HasInclude_Rejected(t *testing.T) {
+	_, _, err := LoadEnvFile("testdata/env/has-include-error.json5", "dev")
+	if err == nil {
+		t.Fatal("env file with @include → expected error")
+	}
+	if !strings.Contains(err.Error(), "@include") {
+		t.Errorf("error should mention '@include'; got %v", err)
+	}
+}
+
+func TestLoadEnvFile_FileNotExist(t *testing.T) {
+	env, active, err := LoadEnvFile("/totally/does/not/exist.json5", "")
+	if err != nil {
+		t.Errorf("missing file should NOT error; got %v", err)
+	}
+	if len(env) != 0 {
+		t.Errorf("missing file → empty map; got %v", env)
+	}
+	if active != "" {
+		t.Errorf("missing file → empty active; got %q", active)
+	}
+}
+
 // TestLoadEnvFile_ActiveFieldPointsToMissingSegment 锁定 $active 指向不存在
 // segment 时的错误消息含 $active 上下文。
 func TestLoadEnvFile_ActiveFieldPointsToMissingSegment(t *testing.T) {

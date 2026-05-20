@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // DefaultEnvFileName is the basename loader.Load() searches next to the
@@ -129,8 +130,26 @@ func LoadEnvFile(path, envName string) (envMap map[string]any, active string, er
 
 // rejectIncludesInEnvFile walks the root map and errors on any string
 // value starting with "@" (and not escaped with "\@"). design §8.2 末尾:
-// env files do not support @include. Task 5 fills this in.
+// env files do not support @include — keeps recursion complexity bounded
+// and avoids env-vs-route include semantics ambiguity.
 func rejectIncludesInEnvFile(node any, path string) error {
-	// Task 5 will implement the recursive walk + reject logic.
+	switch v := node.(type) {
+	case map[string]any:
+		for k, child := range v {
+			if err := rejectIncludesInEnvFile(child, path); err != nil {
+				return fmt.Errorf("env file %q at key %q: %w", path, k, err)
+			}
+		}
+	case []any:
+		for i, child := range v {
+			if err := rejectIncludesInEnvFile(child, path); err != nil {
+				return fmt.Errorf("env file %q at index %d: %w", path, i, err)
+			}
+		}
+	case string:
+		if strings.HasPrefix(v, "@") && !strings.HasPrefix(v, "\\@") {
+			return fmt.Errorf("@include is not supported in env files (use main config @include instead): %q", v)
+		}
+	}
 	return nil
 }

@@ -1,0 +1,8 @@
+{
+  $default: {
+    apiHost: "@shared/host.json5",
+  },
+  dev: {
+    token: "dev-xxx",
+  },
+}
