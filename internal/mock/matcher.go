@@ -43,6 +43,10 @@ func CompileMatcher(src string) (*Matcher, error) {
 //   - (false, err): runtime error — caller treats as "no match" and warns
 //                   (design §4.5 cases-error-handling table)
 //
+// Calling Evaluate on a nil *Matcher is safe and yields (true, nil) — the
+// same as the empty-source sentinel. This lets callers omit a nil check
+// when they keep matchers in a slice that may be sparse.
+//
 // The third return form is the downgrade path: we deliberately do NOT
 // surface the error as a 500, because that would let a single bad case
 // definition crash the whole route.

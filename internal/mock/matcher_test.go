@@ -152,7 +152,13 @@ func TestMatcher_Evaluate_MissingField(t *testing.T) {
 			"query": map[string]any{}, // no "fail"
 		},
 	}
-	ok, _ := m.Evaluate(env)
+	ok, err := m.Evaluate(env)
+	// expr's behavior on missing fields varies across versions: it may
+	// return (false, nil) OR (false, err). We accept either; the contract
+	// the route handler relies on is just "ok == false". Logging err here
+	// makes regressions visible (e.g. a future expr returning (false, nil)
+	// would change err here from non-nil to nil — surfaced via test output).
+	t.Logf("missing-field eval => err=%v", err)
 	// expr 对 "<nil> == \"1\"" 在不同版本下的行为：可能返回 (false, nil)
 	// 也可能返回 (false, err)。不论 err 是否非 nil，匹配结果都必须是
 	// false——这就是降级的可见行为。
