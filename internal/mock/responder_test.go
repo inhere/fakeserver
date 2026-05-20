@@ -329,7 +329,10 @@ func TestRespond_BodyAsSlice(t *testing.T) {
 	ts := newRespondServer(t, "GET", "/list", route, r)
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/list")
+	resp, err := http.Get(ts.URL + "/list")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		t.Errorf("Content-Type: got %q", resp.Header.Get("Content-Type"))
@@ -359,7 +362,10 @@ func TestRespond_NestedSliceTemplateRender(t *testing.T) {
 	ts := newRespondServer(t, "GET", "/u/{id}", route, r)
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/u/99")
+	resp, err := http.Get(ts.URL + "/u/99")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	var got map[string]any
@@ -379,7 +385,10 @@ func TestRespond_NilBodyEmptyResponse(t *testing.T) {
 	ts := newRespondServer(t, "GET", "/empty", route, r)
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/empty")
+	resp, err := http.Get(ts.URL + "/empty")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 204 {
 		t.Errorf("status: got %d, want 204", resp.StatusCode)
@@ -408,7 +417,10 @@ func TestRespond_BodyFileAbsolutePath(t *testing.T) {
 	ts := newRespondServer(t, "GET", "/abs", route, r)
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/abs")
+	resp, err := http.Get(ts.URL + "/abs")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Errorf("status: %d", resp.StatusCode)
@@ -426,7 +438,10 @@ func TestRespond_StatusZeroDefaultsTo200(t *testing.T) {
 	ts := newRespondServer(t, "GET", "/d200", route, r)
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/d200")
+	resp, err := http.Get(ts.URL + "/d200")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Errorf("status zero defaults to 200; got %d", resp.StatusCode)
@@ -451,7 +466,10 @@ func TestRespond_BodyFileUnknownExtMime(t *testing.T) {
 	ts := newRespondServer(t, "GET", "/u", route, r)
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/u")
+	resp, err := http.Get(ts.URL + "/u")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	ct := resp.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "application/octet-stream") {

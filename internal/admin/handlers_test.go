@@ -90,7 +90,10 @@ func TestAdmin_RoutesEmptyConfig(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	resp, _ := http.Get(srv.URL + "/__fakeserver/routes")
+	resp, err := http.Get(srv.URL + "/__fakeserver/routes")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Errorf("status=%d", resp.StatusCode)

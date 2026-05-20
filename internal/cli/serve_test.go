@@ -184,7 +184,10 @@ func TestServe_MockRouteRespondsAfterPhase3(t *testing.T) {
 	}
 
 	// 未配置的路径仍走 echo catch-all
-	resp2, _ := http.Get(ts.URL + "/totally/unknown")
+	resp2, err2 := http.Get(ts.URL + "/totally/unknown")
+	if err2 != nil {
+		t.Fatal(err2)
+	}
 	defer resp2.Body.Close()
 	if resp2.StatusCode != 200 {
 		t.Errorf("/totally/unknown: status %d (want echo 200)", resp2.StatusCode)

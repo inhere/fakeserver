@@ -60,7 +60,10 @@ func TestMount_ParamPathRendersFromTemplate(t *testing.T) {
 	ts := mountedServer(t, cfg)
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/u/42")
+	resp, err := http.Get(ts.URL + "/u/42")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	var got map[string]any
 	body, _ := io.ReadAll(resp.Body)
