@@ -87,6 +87,9 @@ func (w *Watcher) loop() {
 				continue
 			}
 			w.armOrReset()
+		// TODO(v0.2): surface fsnotify errors to the caller. Silently
+		// dropped in v0.1 — these are typically rare (permission changes
+		// on watched dirs, FD exhaustion) and not actionable at this layer.
 		case _, ok := <-w.inner.Errors:
 			if !ok {
 				return
@@ -95,6 +98,15 @@ func (w *Watcher) loop() {
 	}
 }
 
+// armOrReset arms the debounce timer or resets it if already armed.
+//
+// Note on Reset semantics: if the timer has already expired and its
+// AfterFunc callback is mid-execution when Reset is called, the timer
+// restarts but the in-flight callback completes — potentially producing
+// a duplicate onChange near the edge of the debounce window. For our
+// hot-reload use case this is benign (a duplicate reload is idempotent),
+// but onChange implementations that have expensive side effects should
+// be aware.
 func (w *Watcher) armOrReset() {
 	w.timerMu.Lock()
 	defer w.timerMu.Unlock()
@@ -106,7 +118,14 @@ func (w *Watcher) armOrReset() {
 }
 
 // Stop terminates the watcher goroutine and closes the underlying
-// fsnotify watcher. Safe to call multiple times.
+// fsnotify watcher. Safe to call multiple times (idempotent).
+//
+// Caveat: if an event armed the debounce timer just before Stop, the
+// timer's onChange callback may still fire AFTER Stop returns. Callers
+// that need a hard "no more callbacks" guarantee should serialize their
+// own state after Stop, or check for a "stopped" flag inside onChange.
+// time.Timer.Stop()'s return value indicates whether the timer was active
+// but does NOT wait for an in-flight AfterFunc callback to finish.
 func (w *Watcher) Stop() error {
 	var err error
 	w.stopOnce.Do(func() {
