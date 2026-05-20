@@ -4,7 +4,7 @@
 
 > **v0.3-phase1-applied 备注（2026-05-19）**：Phase 1 已落地执行。实际接入的是 `github.com/gookit/rux/v2`（v2.0.0），而非 plan 中假设的 `github.com/gookit/rux`（v1 分支）；echo 实际通过 `server.MountEchoRoutes(r)` 一行接入（plan Task 4 模板中的 `EchoNotFoundHandler` / `RegisterEchoEndpoints` 等占位符号在 v2 中不存在）。详见 `docs/fakeserver-design.md` §13 "已落地" 条目与 `internal/echo/probe.md`。下面 plan 主体保留原始内容作为历史参考；以 design 文档与现有代码为 source of truth。
 
-**Goal**：让 `fakeserver serve` 能跑起来——零配置时充当 httpbin 风格 echo server（默认端口 3000），并提供 `/__fakeserver/healthz` 健康检查端点。
+**Goal**：让 `fakeserver serve` 能跑起来——零配置时充当 httpbin 风格 echo server（默认端口 5090），并提供 `/__fakeserver/healthz` 健康检查端点。
 
 **Architecture**：`cmd/fakeserver/main.go` 仅作为极薄入口，所有 CLI 编排逻辑（app 构造、子命令注册、Run handler）在 `internal/cli/` 中，便于未来扩展子命令与单元测试；`gookit/rux` 作为 HTTP server，echo 端点直接复用 `gookit/rux` v2 内置的 `server/` 子包导出 handler，外加一层薄适配避免下游改动跟随 rux 版本漂移；admin 端点单独成包。
 
@@ -20,9 +20,9 @@
 
 1. `go build ./...` 通过
 2. `go test ./...` 全部通过
-3. `fakeserver serve` 在 :3000 启动
-4. `curl http://localhost:3000/anything` 返回 httpbin 风格 JSON（含 method/path/headers）
-5. `curl http://localhost:3000/__fakeserver/healthz` 返回 200 `{"status":"ok"}`
+3. `fakeserver serve` 在 :5090 启动
+4. `curl http://localhost:5090/anything` 返回 httpbin 风格 JSON（含 method/path/headers）
+5. `curl http://localhost:5090/__fakeserver/healthz` 返回 200 `{"status":"ok"}`
 6. `Ctrl+C` 优雅退出（无 panic 栈）
 7. `cmd/fakeserver/main.go` 仅做"导入 + 调用 cli.Run"，不超过 15 行非空代码
 
@@ -716,7 +716,7 @@ func newServeCmd() *gcli.Command {
 		Name: "serve",
 		Desc: "Start the fakeserver HTTP server",
 		Config: func(cmd *gcli.Command) {
-			cmd.IntOpt2(&opts.Port, "port,p", "Listening port", gcli.OptInitValue(3000))
+			cmd.IntOpt2(&opts.Port, "port,p", "Listening port", gcli.OptInitValue(5090))
 			cmd.StrOpt2(&opts.Host, "host", "Listening host", gcli.OptInitValue("0.0.0.0"))
 		},
 		Func: func(cmd *gcli.Command, _ []string) error {
@@ -834,7 +834,7 @@ func newServeCmd() *gcli.Command {
 		Name: "serve",
 		Desc: "Start the fakeserver HTTP server",
 		Config: func(cmd *gcli.Command) {
-			cmd.IntOpt2(&opts.Port, "port,p", "Listening port", gcli.OptInitValue(3000))
+			cmd.IntOpt2(&opts.Port, "port,p", "Listening port", gcli.OptInitValue(5090))
 			cmd.StrOpt2(&opts.Host, "host", "Listening host", gcli.OptInitValue("0.0.0.0"))
 		},
 		Func: func(cmd *gcli.Command, _ []string) error {
@@ -1074,10 +1074,10 @@ git commit -m "test(cli): serve E2E 测试覆盖 healthz/echo/status/fallback"
 |---|---|
 | `go build ./...` | 无输出，退出码 0 |
 | `go test ./...` | `ok` 每个 package；无 FAIL；无 panic |
-| `./fakeserver serve` | stdout 含 `fakeserver listening on http://0.0.0.0:3000` |
-| `curl -s http://localhost:3000/__fakeserver/healthz` | `{"status":"ok"}` |
-| `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/anything` | `200` |
-| `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/status/418` | `418` |
+| `./fakeserver serve` | stdout 含 `fakeserver listening on http://0.0.0.0:5090` |
+| `curl -s http://localhost:5090/__fakeserver/healthz` | `{"status":"ok"}` |
+| `curl -s -o /dev/null -w "%{http_code}" http://localhost:5090/anything` | `200` |
+| `curl -s -o /dev/null -w "%{http_code}" http://localhost:5090/status/418` | `418` |
 | 在 serve 终端按 Ctrl+C | 退出码 0；无 panic 栈 |
 | `wc -l cmd/fakeserver/main.go` | ≤ 15 行（DoD 第 7 条） |
 

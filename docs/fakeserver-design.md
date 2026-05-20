@@ -220,7 +220,7 @@ func (r *Ring) Subscribe() (<-chan Entry, func())
   // ── 服务器选项 ──
   server: {
     host: "0.0.0.0",        // 默认 0.0.0.0
-    port: 3000,             // 默认 3000（与 json-server 一致）
+    port: 5090,             // 默认 5090
     cors: true,             // true | false | 对象（见 § 5.4）
     log: true,              // 默认 true，--quiet 等价 false
     maxBodySize: "1MiB",    // 请求体上限，超限 413
@@ -373,7 +373,7 @@ example/
 
 ```json5
 {
-  server: { port: 3000 },
+  server: { port: 5090 },
   globals: { apiVersion: "v1" },
   routes: [
     "@routes/users.json5",
@@ -456,7 +456,7 @@ type RequestCtx struct {
     Method  string                 // .request.method        e.g. "POST"
     Path    string                 // .request.path          e.g. "/users/42"
     Proto   string                 // .request.proto         e.g. "HTTP/1.1"
-    Host    string                 // .request.host          e.g. "127.0.0.1:3000"
+    Host    string                 // .request.host          e.g. "127.0.0.1:5090"
     IP      string                 // .request.ip            真实 IP（X-Forwarded-For 优先）
     Params  map[string]string      // .request.params.id     路径参数（rux 提供）
     Query   map[string]any         // .request.query.page    单值→string；多值→[]string
@@ -639,7 +639,7 @@ easytpl 默认基于 `html/template`，会把 `"`、`<`、`&` 等做 HTML 实体
 **启动 banner + 路由摘要样例**：
 
 ```
-fakeserver v0.1.0 on :3000  ·  5 routes (4 mock, 1 proxy)  ·  env=dev  ·  echo fallback
+fakeserver v0.1.0 on :5090  ·  5 routes (4 mock, 1 proxy)  ·  env=dev  ·  echo fallback
 
   GET    /ping                            → mock
   GET    /users                           → mock
@@ -880,7 +880,7 @@ CLI 选项：`-e/--env <name>` 选择当前段（默认值见下文）；`--var 
     timeout: "5s",
   },
   dev: {
-    apiHost: "localhost:3000",
+    apiHost: "localhost:5090",
     token: "dev-xxx",
   },
   staging: {
@@ -1013,7 +1013,7 @@ env 文件被 watcher 监听；变更触发与主配置相同的"重新加载+�
       "cwd": "/abs/path",
       "envs": ["dev", "staging", "prod"],
       "lastEnv": "dev",
-      "lastPort": 3000,
+      "lastPort": 5090,
       "lastRunAt": "2026-05-19T10:23:11Z",
       "pidFile": "/abs/path/.fakeserver/run.pid"
     }
@@ -1044,7 +1044,7 @@ env 文件被 watcher 监听；变更触发与主配置相同的"重新加载+�
 ```
 fakeserver list
   ID            NAME       STATUS    PORT   ENV    LAST RUN
-  a1b2c3d4e5f6  my-app     running   3000   dev    2026-05-19 10:23
+  a1b2c3d4e5f6  my-app     running   5090   dev    2026-05-19 10:23
   f7e6d5c4b3a2  other-app  idle      -      prod   2026-05-18 14:01
 
 fakeserver use a1b2c3d4e5f6

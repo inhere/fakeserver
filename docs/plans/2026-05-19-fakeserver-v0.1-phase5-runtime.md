@@ -1830,7 +1830,7 @@ git -C D:/work/aidev/lite-tools/fakeserver commit -m "feat(config): watcher 文�
 
 ```
    ╭─ fakeserver v0.1.0
-   │  listening on http://0.0.0.0:3000
+   │  listening on http://0.0.0.0:5090
    │  config:      ./fakeserver.json5 (+2 includes)
    │  routes:      5 mock, 2 cases, 1 proxy, fallback=echo
    │  env:         (none)
@@ -2019,12 +2019,12 @@ func TestBanner_FullCfg(t *testing.T) {
 		SourcePaths: []string{"/abs/fakeserver.json5"},
 	}
 	var buf bytes.Buffer
-	printBanner(&buf, cfg, "v0.1.0", "0.0.0.0:3000")
+	printBanner(&buf, cfg, "v0.1.0", "0.0.0.0:5090")
 	s := buf.String()
 	if !strings.Contains(s, "fakeserver") || !strings.Contains(s, "v0.1.0") {
 		t.Errorf("missing name/version: %q", s)
 	}
-	if !strings.Contains(s, "0.0.0.0:3000") {
+	if !strings.Contains(s, "0.0.0.0:5090") {
 		t.Errorf("missing addr: %q", s)
 	}
 	if !strings.Contains(s, "1 mock") || !strings.Contains(s, "1 cases") || !strings.Contains(s, "1 proxy") {
@@ -2037,7 +2037,7 @@ func TestBanner_FullCfg(t *testing.T) {
 
 func TestBanner_NoCfg(t *testing.T) {
 	var buf bytes.Buffer
-	printBanner(&buf, nil, "v0.1.0", "0.0.0.0:3000")
+	printBanner(&buf, nil, "v0.1.0", "0.0.0.0:5090")
 	s := buf.String()
 	if !strings.Contains(s, "echo-only") {
 		t.Errorf("nil cfg should mention echo-only: %q", s)
@@ -2062,7 +2062,7 @@ import (
 // printBanner writes the startup banner to w. design §5.1 末尾 sample:
 //
 //   ╭─ fakeserver v0.1.0
-//   │  listening on http://0.0.0.0:3000
+//   │  listening on http://0.0.0.0:5090
 //   │  config:      /abs/fakeserver.json5 (+0 includes)
 //   │  routes:      1 mock, 1 cases, 1 proxy, fallback=echo
 //   │  env:         (none)

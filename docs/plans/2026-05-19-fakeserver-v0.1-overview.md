@@ -14,7 +14,7 @@
 
 ## 1. 拆分原则
 
-**v0.1 MVP 是一次性范围**（design §1.3），但**一次性执行成本太高**——直接照搬 design 文档展成单一计划，估算超过 3000 行步骤、20+ 个模块改动，无法在 review checkpoint 之间清晰收口。
+**v0.1 MVP 是一次性范围**（design §1.3），但**一次性执行成本太高**——直接照搬 design 文档展成单一计划，估算超过 5090 行步骤、20+ 个模块改动，无法在 review checkpoint 之间清晰收口。
 
 把 v0.1 切成 5 个 Phase 的依据：
 
@@ -64,7 +64,7 @@
 
 1. `go build ./...` 通过
 2. `go test ./...` 全部通过（11 个用例）
-3. `fakeserver serve` 在 :3000 启动
+3. `fakeserver serve` 在 :5090 启动
 4. `curl /__fakeserver/healthz` → `{"status":"ok"}`
 5. `curl /anything` → httpbin 风格 JSON
 6. `Ctrl+C` 优雅退出
@@ -231,7 +231,7 @@
 - **Phase 4 commit 流水（11 个 commit）**：
   - Task 1: 85e01d3 (引入 expr + smoke) + a4ea93c (smoke 防御断言)
   - Task 2: 14e6878 (Matcher 实现) + 271cf6d (nil-safe doc + log 缺字段 err)
-  - Task 3: b34b47f (selector 四种 strategy) + 56555a2 (分布测试 N=3000)
+  - Task 3: b34b47f (selector 四种 strategy) + 56555a2 (分布测试 N=5090)
   - Task 4: 334f318 (RespondCases) + 1c79add (headers 合并测试 + 抑制 log 噪声)
   - Task 5: 5244fdf (router cases 分支 + Validate when 预检 + Warn) + efaf9a8 (错误前缀对齐 + 测试覆盖)
   - Task 6: a2222e9 (rewrite 编译) + 020bb3e (空 pattern 拒绝 + 文档分隔语义)
