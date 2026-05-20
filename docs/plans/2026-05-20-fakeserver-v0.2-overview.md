@@ -45,7 +45,7 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 
 ### Phase 1 — SourceFile 修复 + envfile.go 基础加载
 
-**详细计划**：[v0.2/phase1-envfile.md](v0.2/phase1-envfile.md)
+**详细计划**：[v0.2/2026-05-20-fakeserver-v0.2-phase1-envfile.md](v0.2/2026-05-20-fakeserver-v0.2-phase1-envfile.md)
 
 **目标**：让 `internal/config/Load()` 在加载主配置之后自动查找并加载同目录 `fakeserver.env.json5`，把 `$default` + 选中段合并为 `cfg.Env map[string]any`；同时修复 v0.1 `Route.SourceFile` 始终为空的存量 bug，让相对路径 `bodyFile` 和 env 文件路径正确解析。
 
@@ -109,7 +109,7 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 
 ### Phase 2 — CLI 整合 + osenv 白名单 + env 文件 hot-reload
 
-**详细计划**：`phase2-cli-osenv.md`（待生成）
+**详细计划**：[v0.2/2026-05-20-fakeserver-v0.2-phase2-cli-osenv.md](v0.2/2026-05-20-fakeserver-v0.2-phase2-cli-osenv.md)
 
 **目标**：让 `fakeserver serve --env <name> --var k=v` 真正影响渲染——`.env` 在 mock body 模板里可访问、`osenv` 受白名单约束、env 文件改动通过现有 watcher 触发 holder swap。
 
