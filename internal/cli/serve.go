@@ -17,6 +17,7 @@ import (
 	"github.com/inhere/fakeserver/internal/config"
 	"github.com/inhere/fakeserver/internal/echo"
 	"github.com/inhere/fakeserver/internal/mock"
+	"github.com/inhere/fakeserver/internal/proxy"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
@@ -46,15 +47,16 @@ func newServeCmd() *gcli.Command {
 	return c
 }
 
-// assembleRouter mounts mock routes (Phase 3+) first, then admin endpoints,
-// then echo as fallback. rux's radix tree (static > param > wildcard)
-// ensures specific user routes win over the echo /*path catch-all.
+// assembleRouter mounts mock routes first, then proxy routes, then admin
+// endpoints, then echo as fallback. rux's radix tree (static > param >
+// wildcard) ensures specific user routes win over the echo /*path catch-all.
 //
-// cfg may be nil — in that case mock.Mount is a no-op and the server
+// cfg may be nil — in that case both Mount calls are no-ops and the server
 // behaves identically to Phase 1's zero-config mode.
 func assembleRouter(cfg *config.Config, renderer tpl.Renderer) *rux.Router {
 	r := rux.New()
-	_ = mock.Mount(r, cfg, renderer) // Phase 3: only single-response routes register
+	_ = mock.Mount(r, cfg, renderer)  // single-response + cases
+	_ = proxy.Mount(r, cfg, renderer) // proxy routes
 	admin.Mount(r)
 	echo.Mount(r)
 	return r
@@ -111,6 +113,13 @@ func runServe(opts serveOptions) error {
 		return err
 	}
 
+	// Phase 4: emit non-fatal advisories from config.Warn to stderr.
+	if cfg != nil {
+		for _, w := range config.Warn(cfg) {
+			fmt.Fprintln(os.Stderr, "warn:", w)
+		}
+	}
+
 	addr := fmt.Sprintf("%s:%d", opts.Host, opts.Port)
 	var (
 		globals map[string]any
@@ -137,7 +146,7 @@ func runServe(opts serveOptions) error {
 		fmt.Printf("fakeserver listening on http://%s\n", addr)
 		if cfg != nil {
 			PrintRouteSummary(cfg, os.Stdout)
-			fmt.Println("(Phase 3: mock routes are registered and served)")
+			fmt.Println("(Phase 4: mock + cases + proxy routes are registered and served)")
 		} else {
 			fmt.Println("no config; running in echo-only mode")
 		}

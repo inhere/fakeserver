@@ -79,6 +79,87 @@ func TestServe_StatusEndpoint(t *testing.T) {
 	}
 }
 
+func TestServe_E2E_CasesRoute(t *testing.T) {
+	cfg, err := config.Load([]string{"../config/testdata/valid/cases-first-match.json5"}, "", nil)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if errs := config.Validate(cfg); len(errs) > 0 {
+		t.Fatalf("validate: %v", errs)
+	}
+	rdr := tpl.NewRenderer(nil, nil, 1)
+	r := assembleRouter(cfg, rdr)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	// branch: fail=1 → 500
+	resp, _ := http.Get(srv.URL + "/u/42?fail=1")
+	if resp.StatusCode != 500 {
+		t.Errorf("fail=1: status=%d want 500", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// branch: default → 200 + id=42
+	resp, _ = http.Get(srv.URL + "/u/42")
+	if resp.StatusCode != 200 {
+		t.Errorf("default: status=%d want 200", resp.StatusCode)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+	if got["id"] != "42" {
+		t.Errorf("body=%v want id=42", got)
+	}
+}
+
+func TestServe_E2E_ProxyRouteCoexistsWithMock(t *testing.T) {
+	// Spin up a fake upstream
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("UP:" + r.URL.Path))
+	}))
+	defer upstream.Close()
+
+	// Build config: one precise mock + one wildcard proxy
+	cfg := &config.Config{
+		Fallback: "echo",
+		Routes: []config.Route{
+			{
+				Method: []string{"GET"}, Path: "/api/users",
+				Status: 200, Body: map[string]any{"local": true},
+			},
+			{
+				Method: []string{"*"}, Path: "/api/*rest",
+				Proxy: &config.ProxyConfig{Target: upstream.URL, StripPathPrefix: "/api"},
+			},
+		},
+	}
+	if errs := config.Validate(cfg); len(errs) > 0 {
+		t.Fatalf("validate: %v", errs)
+	}
+
+	rdr := tpl.NewRenderer(nil, nil, 1)
+	r := assembleRouter(cfg, rdr)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	// /api/users → precise mock wins
+	resp, _ := http.Get(srv.URL + "/api/users")
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(b), `"local":true`) {
+		t.Errorf("precise mock should win for /api/users; body=%s", string(b))
+	}
+
+	// /api/orders/1 → wildcard proxy
+	resp, _ = http.Get(srv.URL + "/api/orders/1")
+	b, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.HasPrefix(string(b), "UP:/orders/1") {
+		t.Errorf("proxy should win for /api/orders/1; body=%s", string(b))
+	}
+}
+
 func TestServe_MockRouteRespondsAfterPhase3(t *testing.T) {
 	cfg, err := config.Load(
 		[]string{"../config/testdata/valid/single-full.json5"},

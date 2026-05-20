@@ -1,0 +1,17 @@
+{
+  routes: [
+    {
+      method: "*",
+      path: "/api/*rest",
+      proxy: {
+        target: "http://upstream.example:8080",
+        stripPathPrefix: "/api",
+        rewrite: [
+          "^/v1/(.+) => /legacy/$1",
+        ],
+        headers: { "X-Forwarded-By": "fakeserver" },
+        timeout: "10s",
+      },
+    },
+  ],
+}

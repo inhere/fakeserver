@@ -1,0 +1,13 @@
+{
+  routes: [
+    {
+      method: "GET",
+      path: "/u/{id}",
+      strategy: "first-match",
+      cases: [
+        { when: "request.query.fail == \"1\"", status: 500, body: { error: "boom" } },
+        { status: 200, body: { id: "{{ .request.params.id }}", ok: true } },
+      ],
+    },
+  ],
+}

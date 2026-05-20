@@ -49,6 +49,9 @@ func runCheck(opts checkOptions) error {
 		}
 		return errorx.Failf(1, "%s", sb.String())
 	}
+	for _, w := range config.Warn(cfg) {
+		fmt.Fprintln(os.Stderr, "warn:", w)
+	}
 	fmt.Fprintf(opts.out, "OK: %d routes loaded\n", len(cfg.Routes))
 	return nil
 }
