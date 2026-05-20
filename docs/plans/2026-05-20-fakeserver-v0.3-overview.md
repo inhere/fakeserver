@@ -32,7 +32,7 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
-| **1** | `internal/registry` 包（projects.json 读写 + 跨进程文件锁 + PID 文件）+ serve 启动期 Upsert | `internal/registry/{store,lock,pid}.go` + `internal/cli/serve.go` 接入 | `github.com/gofrs/flock v0.13.0`（Task 1 spike 决策）| v0.2 | ~600 行 | ✅ 已完成 (commit 9dba198..3ac36fe) |
+| **1** | `internal/registry` 包（projects.json 读写 + 跨进程文件锁 + PID 文件）+ serve 启动期 Upsert | `internal/registry/{store,lock,pid}.go` + `internal/cli/serve.go` 接入 | `github.com/gofrs/flock v0.13.0`（Task 1 spike 决策）| v0.2 | ~600 行 | ✅ 已完成 (commit 9dba198..644b9e9) |
 | **2** | `fakeserver list / use` 子命令 + envs 提取 + 进程探活 + 综合 E2E + docs 回写 | `internal/cli/{list,use}.go` + registry 探活接口 + envs 提取助手 | — | Phase 1 | ~500 行 | 待开始 |
 
 总计：v0.3 ≈ 1100 行代码（含测试），分 2 期落地。
@@ -123,7 +123,7 @@ design §14 路线图明确 v0.3 范围**仅含项目注册 + list/use + PID 文
 - Task 3: `83c4768` (lock.go + 低/高竞争两类测试)
 - Task 4: `42cb84a` (pid.go + IsAlive 跨平台)
 - Task 5: `3ac36fe` (serve.go 接入)
-- Task 6: 集成 E2E + docs 回写（本次 commit）
+- Task 6: `644b9e9` (集成 E2E + docs 回写 + 覆盖率补测)
 
 ---
 
