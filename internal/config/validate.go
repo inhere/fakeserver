@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/expr-lang/expr"
 )
 
 const reservedPrefix = "/__fakeserver/"
@@ -63,6 +65,16 @@ func Validate(cfg *Config) []error {
 		// strategy enum
 		if !validStrategy[r.Strategy] {
 			errs = append(errs, fmt.Errorf("%s: strategy %q is not one of random/round-robin/weighted/first-match", prefix, r.Strategy))
+		}
+
+		// when expression syntax pre-check (Phase 4)
+		for ci, cs := range r.Cases {
+			if cs.When == "" {
+				continue
+			}
+			if _, cerr := expr.Compile(cs.When, expr.AsBool()); cerr != nil {
+				errs = append(errs, fmt.Errorf("%s cases[%d].when: %w", prefix, ci, cerr))
+			}
 		}
 
 		// proxy vs mock mutex
@@ -124,4 +136,75 @@ func resolveRoutePath(p, routeSource string, sources []string) string {
 		return p
 	}
 	return filepath.Join(filepath.Dir(base), p)
+}
+
+// Warn returns non-fatal advisory messages found during validation.
+// design §3.7 warning bucket. Caller (cli/serve.go, cli/check.go) is
+// expected to print these to stderr without affecting exit code.
+//
+// Currently checks:
+//   - strategy=first-match where every case has a when (no fallback);
+//     warns the route can return 500 "no case matched" at runtime.
+//   - proxy.target host resolves to localhost/private (design §9.4 info).
+func Warn(cfg *Config) []string {
+	if cfg == nil {
+		return nil
+	}
+	var warns []string
+	for i, r := range cfg.Routes {
+		prefix := fmt.Sprintf("routes[%d] (%s %s)", i, strings.Join(r.Method, ","), r.Path)
+
+		// first-match without fallback
+		if r.Strategy == "first-match" && len(r.Cases) > 0 {
+			hasFallback := false
+			for _, c := range r.Cases {
+				if c.When == "" {
+					hasFallback = true
+					break
+				}
+			}
+			if !hasFallback {
+				warns = append(warns, fmt.Sprintf("%s: strategy=first-match with no fallback case (all cases have when); runtime requests that match no case will return 500", prefix))
+			}
+		}
+
+		// proxy.target private host
+		if r.Proxy != nil && r.Proxy.Target != "" {
+			if isPrivateOrLocalhost(r.Proxy.Target) {
+				warns = append(warns, fmt.Sprintf("%s: proxy.target %q resolves to localhost/private network (intentional? double-check)", prefix, r.Proxy.Target))
+			}
+		}
+	}
+	return warns
+}
+
+// isPrivateOrLocalhost is a cheap heuristic on the host string of a URL.
+// It does NOT do DNS resolution — only checks literal hosts. Good enough
+// for an advisory warning.
+func isPrivateOrLocalhost(target string) bool {
+	u, err := url.Parse(target)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+	for _, p := range []string{"10.", "192.168.", "169.254."} {
+		if strings.HasPrefix(host, p) {
+			return true
+		}
+	}
+	if strings.HasPrefix(host, "172.") {
+		// 172.16.0.0/12
+		parts := strings.SplitN(host, ".", 3)
+		if len(parts) >= 2 {
+			var n int
+			_, _ = fmt.Sscanf(parts[1], "%d", &n)
+			if n >= 16 && n <= 31 {
+				return true
+			}
+		}
+	}
+	return false
 }

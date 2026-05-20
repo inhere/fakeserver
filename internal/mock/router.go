@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gookit/rux/v2"
@@ -9,36 +10,56 @@ import (
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
-// Mount registers all single-response mock routes from cfg onto r. Routes
-// with cases[] or proxy{} are skipped in Phase 3 — Phase 4 handles them.
+// Mount registers mock routes (single-response and cases) onto r. Routes
+// with proxy{} are skipped — proxy.Mount handles them.
 //
-// Returns an error only for misconfigured method names; routes with valid
-// method sets are guaranteed to register.
+// Phase 4 dispatch:
+//
+//	route.Proxy != nil       → skip (proxy.Mount registers separately)
+//	len(route.Cases) > 0     → precompile matchers + selector, register cases handler
+//	otherwise                → register the Phase 3 single-response handler
+//
+// Compile errors in any when-expression are returned as the first error
+// (Validate normally catches these — this is defense-in-depth so the
+// router never silently registers a half-broken route).
 func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 	if cfg == nil {
 		return nil
 	}
 	for i := range cfg.Routes {
-		route := &cfg.Routes[i] // pointer so handler closure sees the same instance
-		if route.Proxy != nil || len(route.Cases) > 0 {
-			continue // Phase 4
+		route := &cfg.Routes[i] // closure pointer
+		if route.Proxy != nil {
+			continue
 		}
-		handler := makeHandler(route, renderer)
+
+		var handler rux.HandlerFunc
+		if len(route.Cases) > 0 {
+			matchers := make([]*Matcher, len(route.Cases))
+			for ci, c := range route.Cases {
+				m, err := CompileMatcher(c.When)
+				if err != nil {
+					return fmt.Errorf("route[%d] %s %s: %w", i, strings.Join(route.Method, ","), route.Path, err)
+				}
+				matchers[ci] = m
+			}
+			selector := NewSelector(route.Strategy)
+			handler = func(c *rux.Context) {
+				RespondCases(c, route, matchers, selector, renderer)
+			}
+		} else {
+			handler = func(c *rux.Context) {
+				Respond(c, route, renderer)
+			}
+		}
+
 		for _, m := range route.Method {
 			method := strings.ToUpper(m)
 			if method == "*" {
 				r.Any(route.Path, handler)
 			} else {
-				// rux v2: Add(path, handler, methods ...string)
 				r.Add(route.Path, handler, method)
 			}
 		}
 	}
 	return nil
-}
-
-func makeHandler(route *config.Route, renderer tpl.Renderer) rux.HandlerFunc {
-	return func(c *rux.Context) {
-		Respond(c, route, renderer)
-	}
 }

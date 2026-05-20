@@ -94,17 +94,18 @@ func TestMount_SkipsCasesAndProxyRoutes(t *testing.T) {
 		t.Errorf("/single: status %d", resp1.StatusCode)
 	}
 
-	// /with-cases 与 /proxy 在 Phase 3 应未注册，命中 NotFound
+	// Phase 4: /with-cases 已注册（cases handler），不再是 404
 	resp2, _ := http.Get(ts.URL + "/with-cases")
 	resp2.Body.Close()
-	if resp2.StatusCode != 404 {
-		t.Errorf("/with-cases (cases skipped in Phase 3): status %d, want 404", resp2.StatusCode)
+	if resp2.StatusCode == 404 {
+		t.Errorf("/with-cases (Phase 4: cases routes are registered): got 404, want non-404")
 	}
 
+	// /proxy 仍由 proxy.Mount 处理，mock.Mount 不注册，返回 404
 	resp3, _ := http.Get(ts.URL + "/proxy")
 	resp3.Body.Close()
 	if resp3.StatusCode != 404 {
-		t.Errorf("/proxy (proxy skipped in Phase 3): status %d, want 404", resp3.StatusCode)
+		t.Errorf("/proxy (proxy skipped by mock.Mount): status %d, want 404", resp3.StatusCode)
 	}
 }
 
@@ -126,5 +127,70 @@ func TestMount_MultipleMethods(t *testing.T) {
 	resp2.Body.Close()
 	if resp2.StatusCode != 200 {
 		t.Errorf("HEAD /x: %d", resp2.StatusCode)
+	}
+}
+
+func TestMount_RegistersCasesRoute(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"GET"}, Path: "/x", Strategy: "first-match",
+			Cases: []config.RouteCase{
+				{When: `request.query.fail == "1"`, Status: 500, Body: "boom"},
+				{Status: 200, Body: "ok"},
+			},
+		}},
+	}
+	r := rux.New()
+	rdr := tpl.NewRenderer(nil, nil, 1)
+	if err := Mount(r, cfg, rdr); err != nil {
+		t.Fatalf("Mount: %v", err)
+	}
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	resp, _ := http.Get(srv.URL + "/x?fail=1")
+	if resp.StatusCode != 500 {
+		t.Errorf("cases first-match got %d want 500", resp.StatusCode)
+	}
+	resp, _ = http.Get(srv.URL + "/x")
+	if resp.StatusCode != 200 {
+		t.Errorf("cases fallback got %d want 200", resp.StatusCode)
+	}
+}
+
+func TestMount_StillSkipsProxyRoute(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"*"}, Path: "/api/*rest",
+			Proxy:  &config.ProxyConfig{Target: "http://upstream:8080"},
+		}},
+	}
+	r := rux.New()
+	rdr := tpl.NewRenderer(nil, nil, 1)
+	if err := Mount(r, cfg, rdr); err != nil {
+		t.Fatalf("Mount: %v", err)
+	}
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+	resp, _ := http.Get(srv.URL + "/api/users/1")
+	if resp.StatusCode != 404 {
+		t.Errorf("proxy route should not be mounted by mock.Mount; got status %d", resp.StatusCode)
+	}
+}
+
+func TestMount_CasesCompileError(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"GET"}, Path: "/x",
+			Cases: []config.RouteCase{
+				{When: `bad syntax ==`, Status: 200, Body: "a"},
+			},
+		}},
+	}
+	r := rux.New()
+	rdr := tpl.NewRenderer(nil, nil, 1)
+	err := Mount(r, cfg, rdr)
+	if err == nil {
+		t.Fatal("Mount should error on bad when (Validate normally catches this; defense-in-depth)")
 	}
 }

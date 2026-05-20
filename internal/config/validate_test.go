@@ -112,3 +112,84 @@ func containsErrorWith(errs []error, subs ...string) bool {
 	}
 	return false
 }
+
+func TestValidate_WhenSyntaxError(t *testing.T) {
+	cfg := &Config{
+		Fallback: "echo",
+		Routes: []Route{{
+			Method: []string{"GET"}, Path: "/x",
+			Cases: []RouteCase{
+				{When: `request.query.fail ==`, Status: 200, Body: "a"},
+			},
+		}},
+	}
+	errs := Validate(cfg)
+	if !anyErrContains(errs, "when") {
+		t.Errorf("expected when-syntax error, got %v", errs)
+	}
+}
+
+func TestValidate_WhenEmpty_NoError(t *testing.T) {
+	cfg := &Config{
+		Fallback: "echo",
+		Routes: []Route{{
+			Method: []string{"GET"}, Path: "/x",
+			Cases: []RouteCase{
+				{Status: 200, Body: "a"}, // no when — 永远匹配
+			},
+		}},
+	}
+	errs := Validate(cfg)
+	if len(errs) > 0 {
+		t.Errorf("empty when should not error, got %v", errs)
+	}
+}
+
+func TestWarn_FirstMatchNoFallback(t *testing.T) {
+	cfg := &Config{
+		Fallback: "echo",
+		Routes: []Route{{
+			Method: []string{"GET"}, Path: "/x", Strategy: "first-match",
+			Cases: []RouteCase{
+				{When: `request.query.a == "1"`, Status: 200, Body: "a"},
+				{When: `request.query.b == "1"`, Status: 200, Body: "b"},
+			},
+		}},
+	}
+	warns := Warn(cfg)
+	if len(warns) == 0 {
+		t.Fatal("expected warn for first-match with no fallback")
+	}
+	if !strings.Contains(warns[0], "first-match") || !strings.Contains(warns[0], "no fallback") {
+		t.Errorf("warn msg=%q", warns[0])
+	}
+}
+
+func TestWarn_FirstMatchWithFallback_Silent(t *testing.T) {
+	cfg := &Config{
+		Fallback: "echo",
+		Routes: []Route{{
+			Method: []string{"GET"}, Path: "/x", Strategy: "first-match",
+			Cases: []RouteCase{
+				{When: `request.query.a == "1"`, Status: 200, Body: "a"},
+				{Status: 200, Body: "fallback"}, // 兜底 case
+			},
+		}},
+	}
+	warns := Warn(cfg)
+	for _, w := range warns {
+		if strings.Contains(w, "first-match") {
+			t.Errorf("should not warn when fallback case exists; got %q", w)
+		}
+	}
+}
+
+// anyErrContains returns true if any error message contains sub (case-sensitive).
+func anyErrContains(errs []error, sub string) bool {
+	for _, e := range errs {
+		if strings.Contains(e.Error(), sub) {
+			return true
+		}
+	}
+	return false
+}
