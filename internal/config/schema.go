@@ -37,7 +37,7 @@ type ServerOpts struct {
 	CORS           any      `json:"cors"` // true | false | object — kept as raw any here; Phase 5 parses
 	Log            *bool    `json:"log"`  // pointer to detect "unset" vs "false"
 	MaxBodySize    string   `json:"maxBodySize"`
-	AdminEnabled   bool     `json:"adminEnabled"`
+	AdminEnabled   *bool    `json:"adminEnabled"` // pointer：区分 explicit false vs 缺省（默认 true）
 	OSEnvWhitelist []string `json:"osenvWhitelist"`
 	FakerSeed      int64    `json:"fakerSeed"`
 	HistorySize    int      `json:"historySize"`

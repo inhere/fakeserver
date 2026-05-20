@@ -15,6 +15,8 @@ import (
 	"github.com/inhere/fakeserver/internal/registry"
 )
 
+func boolPtr(v bool) *bool { return &v }
+
 func TestAPIProjects_ReturnsRegistryProjects(t *testing.T) {
 	d := t.TempDir()
 	regPath := filepath.Join(d, "projects.json")
@@ -26,7 +28,7 @@ func TestAPIProjects_ReturnsRegistryProjects(t *testing.T) {
 	}
 
 	router := rux.New()
-	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: true}}
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
 	Mount(router, cfg, regPath, recorder.New(10))
 
 	w := httptest.NewRecorder()
@@ -45,7 +47,7 @@ func TestAPIProjects_ReturnsRegistryProjects(t *testing.T) {
 
 func TestAPIConfig_RedactsSensitiveKeys(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerOpts{AdminEnabled: true},
+		Server: config.ServerOpts{AdminEnabled: boolPtr(true)},
 		Env: map[string]any{
 			"apiHost":   "dev.local",
 			"token":     "should-be-redacted",
@@ -80,7 +82,7 @@ func TestAPIHistory_ReturnsRingSnapshot(t *testing.T) {
 	ring.Append(recorder.Entry{Method: "POST", Path: "/x", Status: 201})
 
 	router := rux.New()
-	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: true}}
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
 	Mount(router, cfg, "", ring)
 
 	w := httptest.NewRecorder()
@@ -94,7 +96,7 @@ func TestAPIHistory_ReturnsRingSnapshot(t *testing.T) {
 
 func TestMount_AdminDisabled_NoEndpoints(t *testing.T) {
 	router := rux.New()
-	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: false}}
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(false)}}
 	Mount(router, cfg, "", recorder.New(10))
 
 	endpoints := []string{

@@ -16,7 +16,7 @@ import (
 // 当 cfg.Server.AdminEnabled == false 时整体跳过（design §11.6）。
 // regPath：~/.config/fakeserver/projects.json 的绝对路径，用于 /api/projects。
 func Mount(r *rux.Router, cfg *config.Config, regPath string, ring *recorder.Ring) {
-	if cfg == nil || !cfg.Server.AdminEnabled {
+	if cfg == nil || cfg.Server.AdminEnabled == nil || !*cfg.Server.AdminEnabled {
 		return
 	}
 	r.GET("/__fakeserver/api/projects", apiProjectsHandler(regPath))

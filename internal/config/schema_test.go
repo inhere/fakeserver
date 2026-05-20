@@ -15,8 +15,8 @@ func TestApplyDefaults_ZeroValues(t *testing.T) {
 	if cfg.Server.MaxBodySize != "1MiB" {
 		t.Errorf("expected default maxBodySize 1MiB, got %q", cfg.Server.MaxBodySize)
 	}
-	if !cfg.Server.AdminEnabled {
-		t.Errorf("expected default adminEnabled=true")
+	if cfg.Server.AdminEnabled == nil || !*cfg.Server.AdminEnabled {
+		t.Errorf("expected default adminEnabled=true (pointer); got %v", cfg.Server.AdminEnabled)
 	}
 	if cfg.Server.HistorySize != 200 {
 		t.Errorf("expected default historySize 200, got %d", cfg.Server.HistorySize)

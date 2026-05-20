@@ -15,15 +15,11 @@ func DefaultPaths() []string {
 // applyDefaults fills in any zero-valued field with the default specified
 // in design §3.1. Non-zero fields are preserved untouched.
 //
-// Note: bool defaults need special handling — for fields that default to
-// true (AdminEnabled), a literal `false` in JSON5 must round-trip as
-// false. We achieve this by leaving AdminEnabled untouched if Globals or
-// any sibling field signals "the user provided server{}" — but for v0.1
-// we accept the simpler rule: AdminEnabled defaults to true on a brand
-// new ServerOpts{} (the cmd-line layer can override post-load if it
-// detects an explicit --no-admin flag in future Phases).
+// v0.4 Phase 1：AdminEnabled 改 *bool 后语义清晰：
+//   - nil（用户未写）→ 设为 &true
+//   - 非 nil → 保留用户写的 true / false
 //
-// Phase 5 may revisit this when the CORS block adds richer semantics.
+// 这允许 design §11.6 的 `adminEnabled: false` 真正生效。
 func applyDefaults(cfg *Config) {
 	if cfg.Server.Host == "" {
 		cfg.Server.Host = "0.0.0.0"
@@ -34,12 +30,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.MaxBodySize == "" {
 		cfg.Server.MaxBodySize = "1MiB"
 	}
-	// AdminEnabled defaults to true. Because bool's zero value is false, we
-	// cannot distinguish "user wrote false" from "user omitted". Phase 2
-	// accepts this; if a Phase 5 user needs adminEnabled:false they can
-	// either accept that behavior or wait for the pointer-based redesign.
-	if !cfg.Server.AdminEnabled {
-		cfg.Server.AdminEnabled = true
+	if cfg.Server.AdminEnabled == nil {
+		t := true
+		cfg.Server.AdminEnabled = &t
 	}
 	if cfg.Server.HistorySize == 0 {
 		cfg.Server.HistorySize = 200

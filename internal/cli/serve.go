@@ -21,8 +21,10 @@ import (
 	"github.com/inhere/fakeserver/internal/middleware"
 	"github.com/inhere/fakeserver/internal/mock"
 	"github.com/inhere/fakeserver/internal/proxy"
+	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/registry"
 	"github.com/inhere/fakeserver/internal/tpl"
+	"github.com/inhere/fakeserver/internal/webui"
 )
 
 type serveOptions struct {
@@ -74,16 +76,25 @@ func newServeCmd() *gcli.Command {
 //
 // cfg may be nil — in that case CORS / BodyLimit degrade to no-ops and
 // the chain reduces to recoverer → logger → router.
-func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOptions) http.Handler {
+func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOptions, ring *recorder.Ring) http.Handler {
 	r := rux.New()
 	_ = mock.Mount(r, cfg, renderer)
 	_ = proxy.Mount(r, cfg, renderer)
-	admin.Mount(r, cfg)
+	if adminOn(cfg) {
+		admin.Mount(r, cfg)
+		webui.Mount(r, cfg, userRegistryPath(), ring)
+	} else {
+		// design §11.6：adminEnabled=false → 所有 /__fakeserver/* 端点不挂载，
+		// UI 也不可达。注册一个明确的 404 catch-all 阻断 echo 兜底。
+		r.Any("/__fakeserver/*path", func(c *rux.Context) {
+			c.Resp.WriteHeader(http.StatusNotFound)
+		})
+	}
 	echo.Mount(r)
 
 	var mws []func(http.Handler) http.Handler
 	mws = append(mws, middleware.Recoverer)
-	mws = append(mws, middleware.Logger(os.Stderr, opts.Quiet, nil)) // ring=nil; v0.4 Phase 1 Task 4 接入
+	mws = append(mws, middleware.Logger(os.Stderr, opts.Quiet, ring))
 
 	var maxBody int64
 	if cfg != nil {
@@ -282,8 +293,21 @@ func runServe(opts serveOptions) error {
 	}
 	renderer := tpl.NewRenderer(globals, osenvWl, seed)
 
+	// v0.4 Phase 1：请求历史环形缓冲。容量取 cfg.Server.HistorySize，
+	// cfg=nil 时用默认 200（design §11.4）。
+	historySize := 200
+	if cfg != nil && cfg.Server.HistorySize > 0 {
+		historySize = cfg.Server.HistorySize
+	}
+	ring := recorder.New(historySize)
+
+	// v0.4 Phase 1：0.0.0.0 + adminEnabled 组合发 WARNING（design §11.6）。
+	if cfg != nil && cfg.Server.Host == "0.0.0.0" && cfg.Server.AdminEnabled != nil && *cfg.Server.AdminEnabled {
+		fmt.Fprintln(os.Stderr, "WARNING: server.host=0.0.0.0 with adminEnabled=true exposes admin endpoints publicly")
+	}
+
 	holder := middleware.NewHolder()
-	holder.Swap(assembleHandler(cfg, renderer, opts))
+	holder.Swap(assembleHandler(cfg, renderer, opts, ring))
 
 	// Start hot-reload watcher if config came from a file and --no-watch isn't set
 	var watcher *config.Watcher
@@ -306,7 +330,7 @@ func runServe(opts serveOptions) error {
 				fmt.Fprintln(os.Stderr, "warn (reload):", w)
 			}
 			newRenderer := tpl.NewRenderer(newCfg.Globals, newCfg.Server.OSEnvWhitelist, newCfg.Server.FakerSeed)
-			holder.Swap(assembleHandler(newCfg, newRenderer, opts))
+			holder.Swap(assembleHandler(newCfg, newRenderer, opts, ring))
 			fmt.Fprintln(os.Stderr, "info: config reloaded; router swapped")
 		})
 		if err != nil {
@@ -348,6 +372,20 @@ func runServe(opts serveOptions) error {
 // returning "v0.1.0"; cmd/fakeserver/main.go can override via ldflags.
 func version() string {
 	return "v0.1.0"
+}
+
+// adminOn 返回 cfg 是否启用 admin/webui 端点（design §11.6）。
+// cfg=nil（echo-only 模式）→ true，保留 v0.1 起 /__fakeserver/healthz 可达的契约。
+// cfg.AdminEnabled=nil 不会在正常路径出现（applyDefaults 已 set）；保险返回 true。
+// 仅当 cfg.Server.AdminEnabled 显式为 *false 时整体禁用 admin/webui。
+func adminOn(cfg *config.Config) bool {
+	if cfg == nil {
+		return true
+	}
+	if cfg.Server.AdminEnabled == nil {
+		return true
+	}
+	return *cfg.Server.AdminEnabled
 }
 
 // userRegistryPath 返回 ~/.config/fakeserver/projects.json 的绝对路径。
