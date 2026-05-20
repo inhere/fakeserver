@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +30,8 @@ type serveOptions struct {
 	Quiet      bool
 	NoCORS     bool
 	NoWatch    bool
+	EnvName     string       // --env / -e <name>; "" → fallback FAKESERVER_ENV → file $active → first segment
+	VarOverrides gcli.Strings // --var key=val (multi-flag accumulating; CSV inside single flag allowed)
 }
 
 func newServeCmd() *gcli.Command {
@@ -46,6 +49,8 @@ func newServeCmd() *gcli.Command {
 			cmd.BoolOpt2(&opts.Quiet, "quiet,q", "Suppress request access log")
 			cmd.BoolOpt2(&opts.NoCORS, "no-cors", "Disable CORS middleware")
 			cmd.BoolOpt2(&opts.NoWatch, "no-watch", "Disable hot-reload watcher")
+			cmd.StrOpt2(&opts.EnvName, "env,e", "Environment segment name (override env file $active and FAKESERVER_ENV)")
+			cmd.VarOpt2(&opts.VarOverrides, "var", "Variable override key=val (repeatable; comma-separated allowed)")
 		},
 		Func: func(cmd *gcli.Command, _ []string) error {
 			return runServe(opts)
@@ -205,6 +210,9 @@ func joinErrs(errs []error) string {
 // assembleHandler. Hot-reload watcher (unless --no-watch) re-assembles and
 // Swaps the handler on every successful config reload.
 func runServe(opts serveOptions) error {
+	if opts.EnvName == "" {
+		opts.EnvName = os.Getenv("FAKESERVER_ENV")
+	}
 	cfg, err := loadServeConfig(opts)
 	if err != nil {
 		return err
@@ -295,4 +303,26 @@ func runServe(opts serveOptions) error {
 // returning "v0.1.0"; cmd/fakeserver/main.go can override via ldflags.
 func version() string {
 	return "v0.1.0"
+}
+
+// parseVarOverrides converts ["a=1,b=2", "c=3"] → map[string]string.
+// Supports repeated flag + CSV inside single flag.
+// Empty entries and malformed (no "=") are skipped with stderr warn.
+func parseVarOverrides(raw []string) map[string]string {
+	out := map[string]string{}
+	for _, entry := range raw {
+		for _, pair := range strings.Split(entry, ",") {
+			pair = strings.TrimSpace(pair)
+			if pair == "" {
+				continue
+			}
+			idx := strings.Index(pair, "=")
+			if idx < 0 {
+				fmt.Fprintf(os.Stderr, "warn: --var %q: missing '=' separator; skipped\n", pair)
+				continue
+			}
+			out[strings.TrimSpace(pair[:idx])] = strings.TrimSpace(pair[idx+1:])
+		}
+	}
+	return out
 }

@@ -158,6 +158,28 @@ func TestServe_E2E_ProxyRouteCoexistsWithMock(t *testing.T) {
 	}
 }
 
+func TestParseVarOverrides_SingleFlag(t *testing.T) {
+	got := parseVarOverrides([]string{"a=1"})
+	if got["a"] != "1" { t.Errorf("a=%q want 1", got["a"]) }
+}
+func TestParseVarOverrides_CommaSeparated(t *testing.T) {
+	got := parseVarOverrides([]string{"a=1,b=2"})
+	if got["a"] != "1" || got["b"] != "2" { t.Errorf("got %v", got) }
+}
+func TestParseVarOverrides_MultipleFlag(t *testing.T) {
+	got := parseVarOverrides([]string{"a=1", "b=2"})
+	if got["a"] != "1" || got["b"] != "2" { t.Errorf("got %v", got) }
+}
+func TestParseVarOverrides_MixedCSVAndMultiple(t *testing.T) {
+	got := parseVarOverrides([]string{"a=1,b=2", "c=3"})
+	if got["a"] != "1" || got["b"] != "2" || got["c"] != "3" { t.Errorf("got %v", got) }
+}
+func TestParseVarOverrides_MalformedSkipped(t *testing.T) {
+	got := parseVarOverrides([]string{"a=1", "no-equals", "b=2"})
+	if got["a"] != "1" || got["b"] != "2" { t.Errorf("got %v", got) }
+	if _, has := got["no-equals"]; has { t.Error("malformed should be skipped") }
+}
+
 func TestServe_MockRouteRespondsAfterPhase3(t *testing.T) {
 	cfg, err := config.Load(
 		[]string{"../config/testdata/valid/single-full.json5"},
