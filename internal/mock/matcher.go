@@ -9,7 +9,8 @@ import (
 // design §4.5 documents the runtime-error-as-skip downgrade semantics.
 //
 // A zero-value Matcher (or one with Program == nil) is the "no when clause"
-// sentinel: Evaluate always returns (true, nil).
+// sentinel: Task 2 will honour this convention in Evaluate by returning
+// (true, nil) so missing-when cases always match.
 //
 // Task 2 fills in CompileMatcher and Evaluate.
 type Matcher struct {

@@ -42,10 +42,11 @@ func TestExprSmokeSyntaxError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected compile error on bad syntax")
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "unexpected") &&
-		!strings.Contains(strings.ToLower(err.Error()), "syntax") &&
-		!strings.Contains(strings.ToLower(err.Error()), "expected") {
-		t.Logf("note: error message wording changed; got %v", err)
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "unexpected") &&
+		!strings.Contains(msg, "syntax") &&
+		!strings.Contains(msg, "expected") {
+		t.Errorf("compile error message changed shape; expected one of {unexpected/syntax/expected}, got %v", err)
 	}
 }
 
@@ -60,4 +61,12 @@ func TestExprSmokeRuntimeError(t *testing.T) {
 	env := map[string]any{"request": map[string]any{}}
 	out, runErr := expr.Run(prog, env)
 	t.Logf("missing field => out=%v (%T), err=%v", out, out, runErr)
+	// Defensive: Task 2's downgrade strategy depends on expr producing EITHER
+	// a runtime error OR a nil/false result when accessing missing fields.
+	// Fail if a future expr version silently returns a non-nil true value.
+	if runErr == nil {
+		if b, ok := out.(bool); ok && b {
+			t.Errorf("missing-field access returned (true, nil) — Task 2's downgrade assumption broken; got out=%v", out)
+		}
+	}
 }
