@@ -23,7 +23,8 @@ func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("[fakeserver] panic in %s %s: %v\n%s", r.Method, r.URL.Path, rec, debug.Stack())
+				stack := debug.Stack()
+				log.Printf("[fakeserver] panic in %s %s: %v\n%s", r.Method, r.URL.Path, rec, stack)
 				// Best-effort: if downstream already wrote headers, this is
 				// a no-op on the wire (ResponseWriter rejects double WriteHeader).
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -32,6 +33,7 @@ func Recoverer(next http.Handler) http.Handler {
 					"error": "internal error",
 					"route": r.Method + " " + r.URL.Path,
 					"panic": panicMsg(rec),
+					"stack": string(stack),
 				})
 			}
 		}()

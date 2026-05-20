@@ -13,8 +13,9 @@ import (
 
 func TestRecoverer_PanicProducesJSON500(t *testing.T) {
 	var stderr bytes.Buffer
+	orig := log.Writer()
 	log.SetOutput(&stderr)
-	defer log.SetOutput(io.Discard)
+	defer log.SetOutput(orig)
 
 	bad := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		panic("kaboom")
@@ -40,6 +41,12 @@ func TestRecoverer_PanicProducesJSON500(t *testing.T) {
 	}
 	if body["panic"] != "kaboom" {
 		t.Errorf("body.panic=%v want 'kaboom'", body["panic"])
+	}
+	if body["stack"] == nil || body["stack"] == "" {
+		t.Errorf("body.stack should be non-empty; got %v", body["stack"])
+	}
+	if !strings.Contains(body["stack"].(string), "goroutine") {
+		t.Errorf("body.stack should contain stack trace; got %v", body["stack"])
 	}
 	if !strings.Contains(stderr.String(), "kaboom") {
 		t.Errorf("stderr should contain panic msg; got %q", stderr.String())
@@ -67,7 +74,9 @@ func TestRecoverer_NormalRequestPassesThrough(t *testing.T) {
 // TestRecoverer_SubsequentRequestsOK 锁定 "panic 不杀进程"：同一个 middleware
 // 实例服务两次请求，第一次 panic，第二次必须 200。
 func TestRecoverer_SubsequentRequestsOK(t *testing.T) {
+	orig := log.Writer()
 	log.SetOutput(io.Discard)
+	defer log.SetOutput(orig)
 	count := 0
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count++
