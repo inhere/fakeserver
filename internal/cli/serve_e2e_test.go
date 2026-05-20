@@ -98,8 +98,13 @@ func TestServe_v01_MVPClosure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 6. Wait for debounce + swap (300ms + safety margin)
-	time.Sleep(600 * time.Millisecond)
+	// 6. Wait for debounce + swap. Poll instead of fixed sleep for resilience
+	// on slow CI machines. 2s budget = 300ms debounce + plenty of safety.
+	// We check for "added" in the body to distinguish the new mock route from
+	// the echo fallback (which also returns 200 but with a different body).
+	if !waitForRouteBody(t, srv.URL+"/v2/new", "added", 2*time.Second) {
+		t.Fatal("new route never became live after config edit")
+	}
 
 	// 7. Verify new route is live
 	verifyOK("new route after reload", srv.URL+"/v2/new", "added")
@@ -118,6 +123,32 @@ func verifyStatus(t *testing.T, label, url string, want int) {
 	if resp.StatusCode != want {
 		t.Errorf("[%s] status=%d want %d", label, resp.StatusCode, want)
 	}
+}
+
+// waitForRouteBody polls url until the response body contains wantSubstr OR
+// budget expires. Returns true if found, false if timeout. We check the body
+// rather than just status because the echo fallback also returns 200 — we need
+// to distinguish "new mock route live" from "echo fallback still serving".
+// Initial polls are fast (10ms); interval grows to amortize over slow startup.
+func waitForRouteBody(t *testing.T, url, wantSubstr string, budget time.Duration) bool {
+	t.Helper()
+	deadline := time.Now().Add(budget)
+	interval := 10 * time.Millisecond
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(url)
+		if err == nil {
+			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if strings.Contains(string(b), wantSubstr) {
+				return true
+			}
+		}
+		time.Sleep(interval)
+		if interval < 100*time.Millisecond {
+			interval *= 2
+		}
+	}
+	return false
 }
 
 // newHolderWithWatcher 模拟 runServe 的 holder + watcher 装配（只是不起 HTTP

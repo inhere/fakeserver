@@ -87,7 +87,10 @@ func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOption
 	}
 
 	if !opts.NoCORS {
-		mws = append(mws, middleware.CORS(corsOptsFromCfg(cfg)))
+		corsOpts, enabled := corsOptsFromCfg(cfg)
+		if enabled {
+			mws = append(mws, middleware.CORS(corsOpts))
+		}
 	}
 
 	return middleware.Chain(r, mws...)
@@ -102,20 +105,28 @@ func parseMaxBodySize(s string) int64 {
 	}
 	n, err := proxy.ParseByteSize(s)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: maxBodySize %q: %v; defaulting to 1MiB\n", s, err)
 		return 1 << 20
 	}
 	return n
 }
 
-// corsOptsFromCfg converts cfg.Server.CORS into middleware.CORSOpts.
-// Phase 5 keeps this minimal: boolean false → caller skipped via opts.NoCORS;
-// boolean true → reflect-mode (CORSOpts{}); map form → populate Origins/
-// Methods/Headers/AllowCredentials.
-func corsOptsFromCfg(cfg *config.Config) middleware.CORSOpts {
+// corsOptsFromCfg converts cfg.Server.CORS into middleware.CORSOpts plus
+// an "enabled" boolean. Phase 5 forms accepted:
+//
+//	cors: true   → enabled=true, opts=reflect-mode
+//	cors: false  → enabled=false, caller skips CORS middleware
+//	cors: { ... }→ enabled=true, opts populated from map
+//	cors: nil    → enabled=true, opts=reflect-mode (default for JSON5 "no cors field")
+//
+// If cfg is nil → enabled=true, opts=reflect-mode (echo-only fallback path).
+func corsOptsFromCfg(cfg *config.Config) (middleware.CORSOpts, bool) {
 	if cfg == nil {
-		return middleware.CORSOpts{}
+		return middleware.CORSOpts{}, true
 	}
 	switch v := cfg.Server.CORS.(type) {
+	case bool:
+		return middleware.CORSOpts{}, v
 	case map[string]any:
 		o := middleware.CORSOpts{}
 		if origins, ok := v["origins"].([]any); ok {
@@ -142,9 +153,9 @@ func corsOptsFromCfg(cfg *config.Config) middleware.CORSOpts {
 		if ac, ok := v["allowCredentials"].(bool); ok {
 			o.AllowCredentials = ac
 		}
-		return o
+		return o, true
 	default:
-		return middleware.CORSOpts{}
+		return middleware.CORSOpts{}, true
 	}
 }
 
