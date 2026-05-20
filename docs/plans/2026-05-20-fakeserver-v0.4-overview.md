@@ -9,6 +9,7 @@
 | 日期 | 版本 | 作者 | 变更说明 |
 |---|---|---|---|
 | 2026-05-20 | v0.4-overview | inhere | 初稿。固化 v0.4 内部的 3 Phase 拆分（内核 + SSE + UI 资源）|
+| 2026-05-21 | v0.4-overview-phase1-applied | inhere | Phase 1 落地：recorder 包 + middleware logger 接入 + webui 3 JSON API + adminEnabled 护栏 |
 
 后续修订：每完成一个 Phase 后在对应行回写 commit 摘要与实际偏差。
 
@@ -31,7 +32,7 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
-| **1** | `internal/recorder` 包（环形缓冲 + Append/Snapshot）+ middleware logger 接入 + `webui/api.go` 3 个 JSON 端点（projects/config/history）+ adminEnabled 安全护栏 | `internal/recorder/` + `internal/webui/{mount,api}.go` + middleware/logger 改造 | — | v0.3 | ~500 行 | 待开始 |
+| **1** | `internal/recorder` 包（环形缓冲 + Append/Snapshot）+ middleware logger 接入 + `webui/api.go` 3 个 JSON 端点（projects/config/history）+ adminEnabled 安全护栏 | `internal/recorder/` + `internal/webui/{mount,api}.go` + middleware/logger 改造 | — | v0.3 | ~500 行 | ✅ 已完成 (commit 64bdf5a..7b4b7b9) |
 | **2** | SSE 实时推送 `/__fakeserver/events` + recorder.Subscribe 多订阅 + 心跳 15s + 慢客户端非阻塞丢包 | `internal/webui/sse.go` + recorder Subscribe/Unsubscribe | — | Phase 1 | ~300 行 | 待开始 |
 | **3** | embed 静态资源 + 4 个 UI 页面（侧栏项目列表 / 路由 / 历史 / 配置）+ 极简 HTML/CSS/JS + 综合 E2E + 文档收尾 | `internal/webui/assets/` + page handlers + v0.4 milestone 闭环 | — | Phase 2 | ~600 行 | 待开始 |
 
@@ -107,6 +108,23 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 8. bd v0.4 Phase 1 epic 创建并关闭
 
 **对 design 章节的映射**：§2.3（依赖图：middleware→recorder，webui→recorder/registry/config）/ §11.3（API 端点 4 个里 3 个 JSON）/ §11.4（请求历史数据来源 + Entry 字段）/ §11.6（安全护栏 adminEnabled + 0.0.0.0 警告）。
+
+**实际落地偏差**：
+
+- **`AdminEnabled` 从 `bool` 升级为 `*bool`**：v0.1 的 known limitation——用户写 `adminEnabled: false` 与漏写无法区分——被 v0.4 修复（design §11.6 要求 `adminEnabled: false` 真正生效）。schema.go 一处字段类型变更 + defaults.go 默认逻辑 + 3 处消费点改用 `*bool` 判断；测试构造点加 `boolPtr()` helper。这是 schema 改动，影响面 7 个文件，但 JSON 序列化语义不变（Go json 模块对 `*bool` 透明）。
+- **`adminOn(cfg)` 在 cfg=nil 时返回 true**：保留 v0.1 起 "echo-only 模式下 `/__fakeserver/healthz` 仍可达"的契约（cli/serve_test.go:TestServe_Healthz）；仅当 cfg.Server.AdminEnabled 显式 `*false` 时禁用 admin/webui。
+- **adminEnabled=false 下注册 catch-all 404**：echo 包注册 `/*path` 兜底路由会把 `/__fakeserver/api/*` 等吞掉返回 200。assembleHandler 在 adminOn=false 时显式注册 `r.Any("/__fakeserver/*path", 404)` 阻断 echo 兜底——这是 design §11.6 "UI 也不可达"的精确语义实现。
+- **`-race` 测试本机环境不可用**：Windows 上 CGO 默认关闭 + 无 gcc 工具链，无法跑 `go test -race`。recorder 并发安全靠 `sync.RWMutex` 保护 + 普通并发测试（N=16 goroutine × 1000 写 + 100 读）通过验证；CI 环境若可用 cgo 可补 race 检测。
+- **Entry.RouteIndex/CaseIndex/ProxyTarget 字段值留空**：design §11.4 提到这些字段，但需要 mock/proxy 包在 handler 内反向告知 logger 命中信息——本 Phase 未做这层耦合，字段结构占位但值为零值。延后到 v1.x mock/proxy 协作时填充。
+
+**Phase 1 测试覆盖**：5 + 8 + 5 + 2 = 20 个新增用例；`internal/recorder` **100.0%**；`internal/webui` 81.4% (≥70%)；`internal/middleware` 88.3% (维持)；`internal/cli` 51.0% (v0.3 时 49.9%，本 Phase 提升 1.1)；`internal/config` 88.3% (维持)。
+
+**Phase 1 commit 流水**：
+- Task 1: `64bdf5a` (recorder.Ring + 测试)
+- Task 2: `160e8b2` (middleware.Logger 加 ring 参数)
+- Task 3: `428afd4` (webui.Mount + 3 JSON 端点 + 脱敏)
+- Task 4: `7b4b7b9` (serve.go 接入 + AdminEnabled *bool + 0.0.0.0 警告 + catch-all 404)
+- Task 5: 文档收尾（本次 commit）
 
 ---
 

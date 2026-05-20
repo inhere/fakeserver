@@ -20,6 +20,7 @@
 | 2026-05-20 | v0.4-phase0.2.3-applied | inhere | v0.2 Phase 3：综合 E2E + bodyFile @include 回归 + v0.2 milestone 闭环 |
 | 2026-05-20 | v0.4-phase0.3.1-applied | inhere | v0.3 Phase 1：registry 包（store/lock/pid）+ serve 启动期 Upsert + PID 写读 |
 | 2026-05-20 | v0.4-phase0.3.2-applied | inhere | v0.3 Phase 2：list/use 子命令 + envs 提取 + 跨进程并发 E2E + v0.3 milestone 闭环 |
+| 2026-05-21 | v0.4-phase0.4.1-applied | inhere | v0.4 Phase 1：recorder 包 + middleware logger 接入 + 3 个 JSON API + adminEnabled 护栏（含 *bool 升级） |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1282,6 +1283,12 @@ if seed == 0 {
 1. **`fakeserver list` 子命令含 5 项语义**：6 列 tabwriter 表格（ID/NAME/STATUS/PORT/ENV/LAST RUN）+ PID 探活（活进程 running + port，死进程 idle + `-`）+ 自动清理死 PID 文件 + lastActiveId 优先排序 + 空注册表友好提示。
 2. **`fakeserver use <id>` 支持前缀匹配**：精确 id 命中优先；否则唯一前缀命中；多个匹配 → ambiguous 报错；不存在 → no match 报错；用 WithLock 持久化 lastActiveId 写回 projects.json。
 3. **跨进程文件锁契约通过 N=4 子进程并发 E2E 验证**：测试二进制双用为 helper 子进程（环境变量切换），同时 Upsert 不同 id，验证 projects.json 最终含 4 条记录无丢失——这是 design §10.3 "原子写 + 跨进程文件锁"契约的真正端到端确认。
+
+### 已落地（v0.4 Phase 1 阶段确认）
+
+1. **recorder 环形缓冲零侵入接入 middleware.Logger**：Logger 加可选 `*recorder.Ring` 参数，nil → 同 v0.3 行为；非 nil → 每个请求 Append 一条 Entry（TS/Method/Path/Status/DurationMs/ClientIP）。RouteIndex/CaseIndex/ProxyTarget 字段结构占位但值待 v1.x mock/proxy 包协作填充。
+2. **webui 包按 adminEnabled 整体挂载，且阻断 echo catch-all 兜底**：cfg.Server.AdminEnabled 升级为 `*bool` 让 `adminEnabled: false` 真正可识别；禁用时 assembleHandler 注册 `/__fakeserver/*path` → 404 阻断 echo 默认 `/*path` 路由——这是 §11.6 "UI 也不可达"的精确实现。config 端点对 env 段做敏感 key 脱敏（token/secret/password 子串 case-insensitive 命中 → "***"）。
+3. **0.0.0.0 + adminEnabled 启动期 WARNING**：design §11.6 安全护栏的"启动时若检测到该组合，打 WARNING 日志"落地；用户希望关闭警告需显式改 host 为 127.0.0.1 或在 fakeserver.json5 写 `adminEnabled: false`。
 
 ### 待评审
 
