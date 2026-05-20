@@ -86,7 +86,7 @@ func Build(route *config.Route, renderer tpl.Renderer) (rux.HandlerFunc, error) 
 
 	var bodyLimit int64 = -1 // sentinel: no per-route limit
 	if p.BodyLimit != "" {
-		n, berr := parseByteSize(p.BodyLimit)
+		n, berr := ParseByteSize(p.BodyLimit)
 		if berr != nil {
 			return nil, fmt.Errorf("proxy.bodyLimit %q: %w", p.BodyLimit, berr)
 		}
@@ -290,10 +290,10 @@ func readUpTo(r io.ReadCloser, buf []byte) (int, error) {
 	return total, errors.New("body exceeds limit")
 }
 
-// parseByteSize converts "10MiB", "16B", "1KiB" etc into a byte count.
+// ParseByteSize converts "10MiB", "16B", "1KiB" etc into a byte count.
 // Supports decimal (B/KB/MB/GB/TB) and binary (KiB/MiB/GiB/TiB) units.
 // Pure suffix-based parser — no external dependency.
-func parseByteSize(s string) (int64, error) {
+func ParseByteSize(s string) (int64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, fmt.Errorf("empty size")

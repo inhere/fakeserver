@@ -16,6 +16,7 @@ import (
 	"github.com/inhere/fakeserver/internal/admin"
 	"github.com/inhere/fakeserver/internal/config"
 	"github.com/inhere/fakeserver/internal/echo"
+	"github.com/inhere/fakeserver/internal/middleware"
 	"github.com/inhere/fakeserver/internal/mock"
 	"github.com/inhere/fakeserver/internal/proxy"
 	"github.com/inhere/fakeserver/internal/tpl"
@@ -25,6 +26,9 @@ type serveOptions struct {
 	Port       int
 	Host       string
 	ConfigFlag string
+	Quiet      bool
+	NoCORS     bool
+	NoWatch    bool
 }
 
 func newServeCmd() *gcli.Command {
@@ -39,6 +43,9 @@ func newServeCmd() *gcli.Command {
 			cmd.IntOpt2(&opts.Port, "port,p", "Listening port")
 			cmd.StrOpt2(&opts.Host, "host", "Listening host")
 			cmd.StrOpt2(&opts.ConfigFlag, "config,c", "Comma-separated config paths (default: search CWD)")
+			cmd.BoolOpt2(&opts.Quiet, "quiet,q", "Suppress request access log")
+			cmd.BoolOpt2(&opts.NoCORS, "no-cors", "Disable CORS middleware")
+			cmd.BoolOpt2(&opts.NoWatch, "no-watch", "Disable hot-reload watcher")
 		},
 		Func: func(cmd *gcli.Command, _ []string) error {
 			return runServe(opts)
@@ -47,28 +54,98 @@ func newServeCmd() *gcli.Command {
 	return c
 }
 
-// assembleRouter mounts mock routes first, then proxy routes, then admin
-// endpoints, then echo as fallback.
+// assembleHandler builds the full request-handling stack:
 //
-// Order matters: rux resolves equal-path conflicts by registration order
-// in the radix tree. By mounting mock before proxy, an exact mock route
-// like /api/users wins over a wildcard proxy route like /api/*rest — which
-// is the typical "intercept one path, forward the rest" pattern. Reverse
-// the order and the wildcard would swallow the exact route.
+//	middleware chain → rux router → mock+proxy+admin+echo
 //
-// rux's tree priority (static > param > wildcard) still applies inside
-// each mount, so /api/users (static) beats /api/{id} (param) regardless
-// of registration order.
+// The order of middlewares (outermost first) is:
 //
-// cfg may be nil — in that case both Mount calls are no-ops and the server
-// behaves identically to Phase 1's zero-config mode.
-func assembleRouter(cfg *config.Config, renderer tpl.Renderer) *rux.Router {
+//  1. Recoverer  — catches downstream panics, always 500 JSON
+//  2. Logger     — access log (no-op when opts.Quiet)
+//  3. BodyLimit  — 413 on requests exceeding cfg.Server.MaxBodySize
+//  4. CORS       — header injection + OPTIONS post-route 204 (no-op when opts.NoCORS)
+//
+// cfg may be nil — in that case CORS / BodyLimit degrade to no-ops and
+// the chain reduces to recoverer → logger → router.
+func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOptions) http.Handler {
 	r := rux.New()
-	_ = mock.Mount(r, cfg, renderer)  // single-response + cases
-	_ = proxy.Mount(r, cfg, renderer) // proxy routes
+	_ = mock.Mount(r, cfg, renderer)
+	_ = proxy.Mount(r, cfg, renderer)
 	admin.Mount(r, cfg)
 	echo.Mount(r)
-	return r
+
+	var mws []func(http.Handler) http.Handler
+	mws = append(mws, middleware.Recoverer)
+	mws = append(mws, middleware.Logger(os.Stderr, opts.Quiet))
+
+	var maxBody int64
+	if cfg != nil {
+		maxBody = parseMaxBodySize(cfg.Server.MaxBodySize)
+	}
+	if maxBody > 0 {
+		mws = append(mws, middleware.BodyLimit(maxBody))
+	}
+
+	if !opts.NoCORS {
+		mws = append(mws, middleware.CORS(corsOptsFromCfg(cfg)))
+	}
+
+	return middleware.Chain(r, mws...)
+}
+
+// parseMaxBodySize tolerates empty/invalid values by returning 1MiB default.
+// design §5 says "1MiB" default — but we keep parsing forgiving so a
+// missing field doesn't kill startup.
+func parseMaxBodySize(s string) int64 {
+	if s == "" {
+		return 1 << 20 // 1MiB default
+	}
+	n, err := proxy.ParseByteSize(s)
+	if err != nil {
+		return 1 << 20
+	}
+	return n
+}
+
+// corsOptsFromCfg converts cfg.Server.CORS into middleware.CORSOpts.
+// Phase 5 keeps this minimal: boolean false → caller skipped via opts.NoCORS;
+// boolean true → reflect-mode (CORSOpts{}); map form → populate Origins/
+// Methods/Headers/AllowCredentials.
+func corsOptsFromCfg(cfg *config.Config) middleware.CORSOpts {
+	if cfg == nil {
+		return middleware.CORSOpts{}
+	}
+	switch v := cfg.Server.CORS.(type) {
+	case map[string]any:
+		o := middleware.CORSOpts{}
+		if origins, ok := v["origins"].([]any); ok {
+			for _, x := range origins {
+				if s, ok := x.(string); ok {
+					o.Origins = append(o.Origins, s)
+				}
+			}
+		}
+		if methods, ok := v["methods"].([]any); ok {
+			for _, x := range methods {
+				if s, ok := x.(string); ok {
+					o.Methods = append(o.Methods, s)
+				}
+			}
+		}
+		if headers, ok := v["headers"].([]any); ok {
+			for _, x := range headers {
+				if s, ok := x.(string); ok {
+					o.Headers = append(o.Headers, s)
+				}
+			}
+		}
+		if ac, ok := v["allowCredentials"].(bool); ok {
+			o.AllowCredentials = ac
+		}
+		return o
+	default:
+		return middleware.CORSOpts{}
+	}
 }
 
 // loadServeConfig resolves the -c flag (or default CWD search) into an
@@ -110,21 +187,18 @@ func joinErrs(errs []error) string {
 	return string(sb)
 }
 
-// runServe assembles the router, optionally loads and prints config, then
-// runs the HTTP server with signal-driven graceful shutdown.
+// runServe assembles the middleware chain + holder + watcher, then runs the
+// HTTP server with signal-driven graceful shutdown.
 //
-// Phase 4: cfg.Routes include single-response mocks (Respond), multi-
-// response cases routes (RespondCases via mock.Mount), and proxy routes
-// (proxy.Mount). Renderer is constructed from cfg.Globals/OSEnvWhitelist/
-// FakerSeed (if present) and shared across all three handlers. config.Warn
-// advisories print to stderr before listen.
+// Phase 5: cfg.Server.MaxBodySize / CORS opts are consumed here via
+// assembleHandler. Hot-reload watcher (unless --no-watch) re-assembles and
+// Swaps the handler on every successful config reload.
 func runServe(opts serveOptions) error {
 	cfg, err := loadServeConfig(opts)
 	if err != nil {
 		return err
 	}
 
-	// Phase 4: emit non-fatal advisories from config.Warn to stderr.
 	if cfg != nil {
 		for _, w := range config.Warn(cfg) {
 			fmt.Fprintln(os.Stderr, "warn:", w)
@@ -144,23 +218,47 @@ func runServe(opts serveOptions) error {
 	}
 	renderer := tpl.NewRenderer(globals, osenvWl, seed)
 
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: assembleRouter(cfg, renderer),
+	holder := middleware.NewHolder()
+	holder.Swap(assembleHandler(cfg, renderer, opts))
+
+	// Start hot-reload watcher if config came from a file and --no-watch isn't set
+	var watcher *config.Watcher
+	if !opts.NoWatch && cfg != nil && len(cfg.SourcePaths) > 0 {
+		paths := cfg.SourcePaths
+		watcher, err = config.NewWatcher(paths, 300*time.Millisecond, func() {
+			newCfg, lerr := config.Load(paths, "", nil)
+			if lerr != nil {
+				fmt.Fprintln(os.Stderr, "warn: reload load err:", lerr)
+				return
+			}
+			if errs := config.Validate(newCfg); len(errs) > 0 {
+				fmt.Fprintln(os.Stderr, "warn: reload validate failed; keeping previous router")
+				for _, e := range errs {
+					fmt.Fprintln(os.Stderr, "  -", e)
+				}
+				return
+			}
+			for _, w := range config.Warn(newCfg) {
+				fmt.Fprintln(os.Stderr, "warn (reload):", w)
+			}
+			newRenderer := tpl.NewRenderer(newCfg.Globals, newCfg.Server.OSEnvWhitelist, newCfg.Server.FakerSeed)
+			holder.Swap(assembleHandler(newCfg, newRenderer, opts))
+			fmt.Fprintln(os.Stderr, "info: config reloaded; router swapped")
+		})
+		if err != nil {
+			return fmt.Errorf("watcher init: %w", err)
+		}
+		defer watcher.Stop()
 	}
+
+	srv := &http.Server{Addr: addr, Handler: holder}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	serverErr := make(chan error, 1)
 	go func() {
-		fmt.Printf("fakeserver listening on http://%s\n", addr)
-		if cfg != nil {
-			PrintRouteSummary(cfg, os.Stdout)
-			fmt.Println("(Phase 4: mock + cases + proxy routes are registered and served)")
-		} else {
-			fmt.Println("no config; running in echo-only mode")
-		}
+		printBanner(os.Stdout, cfg, version(), addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
@@ -180,4 +278,10 @@ func runServe(opts serveOptions) error {
 	}
 	fmt.Println("bye.")
 	return nil
+}
+
+// version returns the build-injected version string. Currently a stub
+// returning "v0.1.0"; cmd/fakeserver/main.go can override via ldflags.
+func version() string {
+	return "v0.1.0"
 }

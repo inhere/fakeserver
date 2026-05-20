@@ -1,4 +1,4 @@
-// 此测试在 `package cli`（非 `cli_test`），以便复用包级私有 assembleRouter。
+// 此测试在 `package cli`（非 `cli_test`），以便复用包级私有 assembleHandler。
 package cli
 
 import (
@@ -14,7 +14,7 @@ import (
 )
 
 func TestServe_Healthz(t *testing.T) {
-	ts := httptest.NewServer(assembleRouter(nil, tpl.NewRenderer(nil, nil, 0)))
+	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/__fakeserver/healthz")
@@ -28,7 +28,7 @@ func TestServe_Healthz(t *testing.T) {
 }
 
 func TestServe_EchoOnAnything(t *testing.T) {
-	ts := httptest.NewServer(assembleRouter(nil, tpl.NewRenderer(nil, nil, 0)))
+	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/anything/abc?x=1")
@@ -52,7 +52,7 @@ func TestServe_EchoOnAnything(t *testing.T) {
 // TestServe_EchoCatchAllOnUnknownPath: rux v2 的 MountEchoRoutes 注册了
 // /*path 兜底，未匹配路径会被回显（fallback 默认 echo）。
 func TestServe_EchoCatchAllOnUnknownPath(t *testing.T) {
-	ts := httptest.NewServer(assembleRouter(nil, tpl.NewRenderer(nil, nil, 0)))
+	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/totally/unknown/path")
@@ -66,7 +66,7 @@ func TestServe_EchoCatchAllOnUnknownPath(t *testing.T) {
 }
 
 func TestServe_StatusEndpoint(t *testing.T) {
-	ts := httptest.NewServer(assembleRouter(nil, tpl.NewRenderer(nil, nil, 0)))
+	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/status/503")
@@ -88,8 +88,7 @@ func TestServe_E2E_CasesRoute(t *testing.T) {
 		t.Fatalf("validate: %v", errs)
 	}
 	rdr := tpl.NewRenderer(nil, nil, 1)
-	r := assembleRouter(cfg, rdr)
-	srv := httptest.NewServer(r)
+	srv := httptest.NewServer(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}))
 	defer srv.Close()
 
 	// branch: fail=1 → 500
@@ -139,8 +138,7 @@ func TestServe_E2E_ProxyRouteCoexistsWithMock(t *testing.T) {
 	}
 
 	rdr := tpl.NewRenderer(nil, nil, 1)
-	r := assembleRouter(cfg, rdr)
-	srv := httptest.NewServer(r)
+	srv := httptest.NewServer(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}))
 	defer srv.Close()
 
 	// /api/users → precise mock wins
@@ -168,8 +166,7 @@ func TestServe_MockRouteRespondsAfterPhase3(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	renderer := tpl.NewRenderer(cfg.Globals, cfg.Server.OSEnvWhitelist, cfg.Server.FakerSeed)
-	r := assembleRouter(cfg, renderer)
-	ts := httptest.NewServer(r)
+	ts := httptest.NewServer(assembleHandler(cfg, renderer, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}))
 	defer ts.Close()
 
 	// single-full.json5 的 /ping route 应该被 mock 响应（不再走 echo catch-all）

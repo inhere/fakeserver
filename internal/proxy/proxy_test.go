@@ -397,7 +397,7 @@ func TestParseByteSize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			got, err := parseByteSize(tt.in)
+			got, err := ParseByteSize(tt.in)
 			if (err != nil) != tt.err {
 				t.Errorf("err=%v want err=%v", err, tt.err)
 			}
