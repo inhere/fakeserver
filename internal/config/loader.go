@@ -154,36 +154,34 @@ func deepMerge(left, right map[string]any) map[string]any {
 // round-trip — mapToConfig extracts and clears the sentinel before
 // running encoding/json, then Load zips routeSources into Route.SourceFile.
 //
+// Called at two loadFile callsites: Load (top-level cfg) and
+// resolveInclude (each @included file). Each route map is annotated
+// exactly once (at the file boundary before expandIncludes recurses),
+// so no "first wins" guard is needed — and we deliberately overwrite
+// any pre-existing `__source_file__` from the user's JSON5 to prevent
+// a malicious config from spoofing the resolved path.
+//
 // Recognizes three shapes:
 //   - map[string]any with a "routes" []any → annotate each map element of routes
 //   - []any → annotate each map element (each is a route)
 //   - map[string]any without "routes" → annotate self (single-route include)
-//
-// Only sets the sentinel if not already present, so the deepest (most
-// specific) source file wins for nested includes.
 func annotateRoutesWithSource(node any, sourceFile string) {
 	switch v := node.(type) {
 	case map[string]any:
 		if routes, ok := v["routes"].([]any); ok {
 			for _, r := range routes {
 				if rm, ok := r.(map[string]any); ok {
-					if _, set := rm["__source_file__"]; !set {
-						rm["__source_file__"] = sourceFile
-					}
+					rm["__source_file__"] = sourceFile
 				}
 			}
 			return
 		}
 		// Single-route map (from a one-route @include file)
-		if _, set := v["__source_file__"]; !set {
-			v["__source_file__"] = sourceFile
-		}
+		v["__source_file__"] = sourceFile
 	case []any:
 		for _, r := range v {
 			if rm, ok := r.(map[string]any); ok {
-				if _, set := rm["__source_file__"]; !set {
-					rm["__source_file__"] = sourceFile
-				}
+				rm["__source_file__"] = sourceFile
 			}
 		}
 	}

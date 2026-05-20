@@ -328,3 +328,32 @@ func TestLoad_RouteSourceFile_FromInclude(t *testing.T) {
 			cfg.Routes[1].SourceFile, subPath)
 	}
 }
+
+// TestLoad_RouteSourceFile_UserSuppliedSentinelIgnored 锁定：用户在 JSON5
+// 里写 __source_file__ 字段不会污染路径解析——loader 总是用真实文件路径
+// 覆盖。防止恶意配置经此 sentinel 注入路径。
+func TestLoad_RouteSourceFile_UserSuppliedSentinelIgnored(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	// User tries to inject a fake SourceFile via the sentinel key
+	body := `{
+		routes: [
+			{ method: "GET", path: "/x", body: "ok", __source_file__: "/evil/path.json5" },
+		],
+	}`
+	if err := os.WriteFile(cfgPath, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load([]string{cfgPath}, "", nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(cfg.Routes))
+	}
+	got := filepath.Clean(cfg.Routes[0].SourceFile)
+	want := filepath.Clean(cfgPath)
+	if got != want {
+		t.Errorf("SourceFile = %q, want %q (user-supplied __source_file__ should be ignored)", got, want)
+	}
+}

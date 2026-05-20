@@ -241,13 +241,17 @@ func TestLoad_BodyFileRelativePath_ResolvedAgainstConfigDir(t *testing.T) {
 	wd, _ := os.Getwd()
 	defer os.Chdir(wd)
 
-	cfgPath, _ := filepath.Abs("testdata/source/cfg.json5")
+	cfgPath, err := filepath.Abs("testdata/source/cfg.json5")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
 	otherDir := t.TempDir()
 	if err := os.Chdir(otherDir); err != nil {
 		t.Fatal(err)
 	}
 
-	cfg, err := Load([]string{cfgPath}, "", nil)
+	var cfg *Config
+	cfg, err = Load([]string{cfgPath}, "", nil)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
