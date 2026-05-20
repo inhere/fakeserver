@@ -33,7 +33,7 @@ type serveOptions struct {
 
 func newServeCmd() *gcli.Command {
 	opts := serveOptions{
-		Port: 3000,
+		Port: 5090,
 		Host: "0.0.0.0",
 	}
 	c := &gcli.Command{

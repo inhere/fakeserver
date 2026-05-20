@@ -9,8 +9,8 @@ func TestApplyDefaults_ZeroValues(t *testing.T) {
 	if cfg.Server.Host != "0.0.0.0" {
 		t.Errorf("expected default host 0.0.0.0, got %q", cfg.Server.Host)
 	}
-	if cfg.Server.Port != 3000 {
-		t.Errorf("expected default port 3000, got %d", cfg.Server.Port)
+	if cfg.Server.Port != 5090 {
+		t.Errorf("expected default port 5090, got %d", cfg.Server.Port)
 	}
 	if cfg.Server.MaxBodySize != "1MiB" {
 		t.Errorf("expected default maxBodySize 1MiB, got %q", cfg.Server.MaxBodySize)

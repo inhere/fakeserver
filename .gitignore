@@ -19,3 +19,7 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# 本地配置
+.fakeserver/
+fakeserver.json5

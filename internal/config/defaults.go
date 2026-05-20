@@ -29,7 +29,7 @@ func applyDefaults(cfg *Config) {
 		cfg.Server.Host = "0.0.0.0"
 	}
 	if cfg.Server.Port == 0 {
-		cfg.Server.Port = 3000
+		cfg.Server.Port = 5090
 	}
 	if cfg.Server.MaxBodySize == "" {
 		cfg.Server.MaxBodySize = "1MiB"

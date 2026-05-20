@@ -10,7 +10,7 @@ import (
 // printBanner writes the startup banner to w. design §5.1 末尾 sample:
 //
 //	╭─ fakeserver v0.1.0
-//	│  listening on http://0.0.0.0:3000
+//	│  listening on http://0.0.0.0:5090
 //	│  config:      /abs/fakeserver.json5 (+0 includes)
 //	│  routes:      1 mock, 1 cases, 1 proxy, fallback=echo
 //	│  env:         (none)

@@ -6,7 +6,7 @@ package cli
 const initTemplate = `{
   // Fakeserver configuration — see docs/fakeserver-design.md for full schema.
   server: {
-    port: 3000,
+    port: 5090,
     cors: true,
   },
 
@@ -35,7 +35,7 @@ const initEnvTemplate = `{
     // Variables shared across every environment. Override per-env below.
   },
   dev: {
-    host: "localhost:3000",
+    host: "localhost:5090",
   },
   staging: {
     host: "stage.api.example.com",

@@ -15,7 +15,7 @@ func TestJSON5Lib_SmokeAcceptsCommonExtensions(t *testing.T) {
 	src := `{
 		// line comment
 		/* block comment */
-		server: { port: 3000 },        // 无引号 key
+		server: { port: 5090 },        // 无引号 key
 		fallback: "echo",
 		routes: [
 			{ method: 'GET', path: "/ping" },  // 单引号字符串
@@ -34,7 +34,7 @@ func TestJSON5Lib_SmokeAcceptsCommonExtensions(t *testing.T) {
 // TestJSON5Lib_SmokeErrorMentionsContext: 解析失败时错误信息应足够定位问题
 // （不强求行号，但要包含可识别的位置或 token 信息）。
 func TestJSON5Lib_SmokeErrorMentionsContext(t *testing.T) {
-	src := `{ server: { port: 3000  routes: [] }`  // 缺逗号
+	src := `{ server: { port: 5090  routes: [] }` // 缺逗号
 	var out map[string]any
 	err := json5.NewDecoder(strings.NewReader(src)).Decode(&out)
 	if err == nil {
@@ -52,8 +52,8 @@ func TestLoad_SingleMinimal(t *testing.T) {
 		t.Fatal("expected non-nil cfg")
 	}
 	// 默认值已填
-	if cfg.Server.Port != 3000 {
-		t.Errorf("expected default port 3000, got %d", cfg.Server.Port)
+	if cfg.Server.Port != 5090 {
+		t.Errorf("expected default port 5090, got %d", cfg.Server.Port)
 	}
 	if cfg.Fallback != "echo" {
 		t.Errorf("expected default fallback=echo, got %q", cfg.Fallback)
