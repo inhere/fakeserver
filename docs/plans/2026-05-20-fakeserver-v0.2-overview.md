@@ -32,7 +32,7 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
 | **1** | SourceFile bug 修复 + envfile.go 基础加载（$default 合并 + $active + 默认查找） | `internal/config/envfile.go` + loader Route.SourceFile 填充 | — | v0.1 | ~400 行 | ✅ 已完成 (commit 29a1eb9..7c5a0f9) |
-| **2** | CLI 整合 + osenv 白名单完整化 + watcher 同步监听 env 文件 | `internal/cli/serve.go --env/--var` flag + `internal/tpl/funcs.go` osenv 收紧 + envfile 模板渲染 | — | Phase 1 | ~500 行 | 待开始 |
+| **2** | CLI 整合 + osenv 白名单完整化 + watcher 同步监听 env 文件 | `internal/cli/serve.go --env/--var` flag + `internal/tpl/funcs.go` osenv 收紧 + envfile 模板渲染 | — | Phase 1 | ~500 行 | ✅ 已完成 (commit afc88b4..20f950c) |
 | **3** | v0.2 收尾 E2E + 综合场景 + 文档回写 | `internal/cli/serve_e2e_test.go` 扩展 + docs 回写 | — | Phase 2 | ~200 行 | 待开始 |
 
 总计：v0.2 ≈ 1100 行代码（含测试），分 3 期落地。
@@ -160,6 +160,25 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 9. `go test ./...` 通过；新增 env 相关用例覆盖；`internal/tpl` osenv 路径覆盖率 ≥ 80%
 
 **对 design 章节的映射**：§8.3 完整优先级链 / §8.4 模板访问 / §8.5 热加载 / §4.6 osenv 白名单完整化。
+
+**实际落地偏差**：
+
+- **gcli flag API**：v3.3.1 没有 `StrsOpt2`，改用 `VarOpt2(&opts.VarOverrides, ...)` + `gcli.Strings` 类型（实现 flag.Value）。`gcli.Strings` 是 `[]string` 别名，与 `parseVarOverrides` 完全兼容。
+- **`--var` 仅支持顶层 key 覆盖**：design §8.2 未明确 dotted path 语义；Phase 2 简化为顶层 deepMerge 替换。v0.3 可扩展。
+- **env 值层级渲染时不暴露 `.env` 自引用**：避免循环引用复杂度。env 值只能引用 `osenv` / `now` / `uuid` 等。
+- **BuildRenderCtx 签名扩展为 4 参（加 envMap）**：v0.1 占位的空 `.env` map 改由调用方传入；`Respond` / `RespondCases` / `proxy.Build` 同步扩展，`Mount` 闭包捕获 cfg.Env 注入。
+- **env 文件路径加入 `cfg.SourcePaths` 而非独立字段**：watcher 直接读 SourcePaths，无需改 watcher API。
+- **LoadDefault 签名同步扩展为 `(cwd, envName, overrides)`** 以保持与 Load 一致。
+
+**Phase 2 测试覆盖**：~12 个新增用例；`internal/tpl` 覆盖率 93.4%；`internal/cli` 覆盖率 46.3%；`internal/config` 维持 88.3%。
+
+**Phase 2 commit 流水**（6 个 commit）：
+- Task 1: `afc88b4` (CLI flags + parseVarOverrides)
+- Task 2: `cd9d9e8` (loader envName + EnvSource→SourcePaths)
+- Task 3: `3ac7e59` (--var deep merge)
+- Task 4: `7e6a297` (env 值渲染 + osenv 贯通)
+- Task 5: `572eed4` (BuildRenderCtx 接 .env)
+- Task 6: `20f950c` (hot-reload E2E + docs 回写)
 
 ---
 

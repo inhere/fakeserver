@@ -16,6 +16,7 @@
 | 2026-05-19 | v0.3-phase4-applied | inhere | Phase 4 落地：internal/mock 增 matcher（expr）+ selector（四 strategy）+ cases.go；internal/proxy 整包（ReverseProxy + 全量字段）；config.Validate 增 when 语法预检；新增 config.Warn 警告通道（first-match 无兜底、proxy.target 私网 info）；cli 装配 proxy.Mount 与 Warn 输出 |
 | 2026-05-19 | v0.3-phase5-applied | inhere | Phase 5 落地：internal/middleware（recoverer/logger/cors/bodylimit/chain/holder）+ internal/config/watcher.go + admin /__fakeserver/routes + 启动 banner + serve --quiet/--no-cors/--no-watch flag。v0.1 MVP 完整闭环。 |
 | 2026-05-20 | v0.4-phase0.2.1-applied | inhere | v0.2 Phase 1：env 文件加载（design §8.1/§8.2/§8.3 部分）+ Route.SourceFile 填充修复 |
+| 2026-05-20 | v0.4-phase0.2.2-applied | inhere | v0.2 Phase 2：env 选段 CLI/env-var 优先级链完整 + env 值模板渲染（osenv 白名单贯通）+ mock 模板 .env 接入 + env 文件 hot-reload |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1254,6 +1255,12 @@ if seed == 0 {
 1. **`fakeserver.env.json5` 自动加载**：loader.Load 在主配置加载后查找同目录 env 文件，合并 `$default` + 选中段写入 `cfg.Env`；env 文件路径写入 `cfg.EnvSource` 供后续 watcher 用。envName="" 时优先级链 `$active` → 首个非 `$default` 段 → 空（CLI/env-var 留 Phase 2）。
 2. **`Route.SourceFile` 填充**：loader 在 expandIncludes 阶段为每条 route 标注来源文件路径，绕过 JSON round-trip 对 `json:"-"` 字段的剥离。修复了 v0.1 遗留的 bd lite-tools-gko（相对 bodyFile 路径解析在 CWD ≠ config 目录时失效）。
 3. **env 文件不支持 @include**：design §8.2 末尾约定的"env 文件不接 include"在 loader 层强制执行；遇 `@xxx` 字符串报错。`\@xxx` 字面值豁免。
+
+### 已落地（v0.2 Phase 2 阶段确认）
+
+1. **env 选段优先级链完整化**：`--env` CLI > `FAKESERVER_ENV` 环境变量 > 文件 `$active` > 首个非 `$default` 段 > 空。`--var key=val` 顶层 deepMerge 覆盖在最后。
+2. **env 文件值层级模板渲染**：env 段的字符串叶子节点在 Load 阶段渲染（`{{ osenv "X" }}` / `{{ now }}` 等可用）；osenv 白名单在 env 文件中同样生效，env 文件不是逃逸通道。
+3. **env 文件参与 hot-reload**：env 文件路径自动加入 watcher 监听列表，编辑后经 300ms 防抖触发 holder swap；mock body 模板 `{{ .env.* }}` 真正可访问。
 
 ### 待评审
 
