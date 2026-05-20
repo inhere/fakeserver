@@ -83,7 +83,7 @@ func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOption
 
 	var mws []func(http.Handler) http.Handler
 	mws = append(mws, middleware.Recoverer)
-	mws = append(mws, middleware.Logger(os.Stderr, opts.Quiet))
+	mws = append(mws, middleware.Logger(os.Stderr, opts.Quiet, nil)) // ring=nil; v0.4 Phase 1 Task 4 接入
 
 	var maxBody int64
 	if cfg != nil {
