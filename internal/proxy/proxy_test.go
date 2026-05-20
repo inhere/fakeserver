@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gookit/rux/v2"
 
@@ -115,5 +116,212 @@ func TestProxy_PostBodyForwarded(t *testing.T) {
 	b, _ := io.ReadAll(resp.Body)
 	if !strings.HasSuffix(string(b), ":hello") {
 		t.Errorf("body=%q upstream did not see request body", string(b))
+	}
+}
+
+func TestProxy_StripPathPrefix(t *testing.T) {
+	upstream := echoUpstream(t)
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"*"}, Path: "/api/*rest",
+			Proxy:  &config.ProxyConfig{Target: upstream.URL, StripPathPrefix: "/api"},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	resp, _ := http.Get(srv.URL + "/api/users/1")
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.HasPrefix(string(b), "UP:GET:/users/1") {
+		t.Errorf("expected /users/1 after strip; got %q", string(b))
+	}
+}
+
+func TestProxy_Rewrite(t *testing.T) {
+	upstream := echoUpstream(t)
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"*"}, Path: "/api/*rest",
+			Proxy: &config.ProxyConfig{
+				Target:  upstream.URL,
+				Rewrite: `^/api/v1/(.+) => /legacy/$1`,
+			},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	resp, _ := http.Get(srv.URL + "/api/v1/orders")
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.HasPrefix(string(b), "UP:GET:/legacy/orders") {
+		t.Errorf("expected /legacy/orders; got %q", string(b))
+	}
+}
+
+func TestProxy_StripThenRewrite(t *testing.T) {
+	upstream := echoUpstream(t)
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"*"}, Path: "/api/*rest",
+			Proxy: &config.ProxyConfig{
+				Target:          upstream.URL,
+				StripPathPrefix: "/api",
+				Rewrite:         `^/v1/(.+) => /legacy/$1`,
+			},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	// /api/v1/orders → strip → /v1/orders → rewrite → /legacy/orders
+	resp, _ := http.Get(srv.URL + "/api/v1/orders")
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.HasPrefix(string(b), "UP:GET:/legacy/orders") {
+		t.Errorf("strip+rewrite chain: got %q", string(b))
+	}
+}
+
+func TestProxy_RequestHeaderInjection(t *testing.T) {
+	var upstreamSawHeader string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamSawHeader = r.Header.Get("X-Forwarded-By")
+		w.WriteHeader(200)
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"GET"}, Path: "/x",
+			Proxy: &config.ProxyConfig{
+				Target: upstream.URL,
+				Headers: map[string]string{
+					"X-Forwarded-By": "fakeserver-{{ .request.method }}",
+				},
+			},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	resp, _ := http.Get(srv.URL + "/x")
+	resp.Body.Close()
+	if upstreamSawHeader != "fakeserver-GET" {
+		t.Errorf("upstream X-Forwarded-By=%q (template not rendered?)", upstreamSawHeader)
+	}
+}
+
+func TestProxy_ResponseHeaderInjection(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"GET"}, Path: "/x",
+			Proxy: &config.ProxyConfig{
+				Target: upstream.URL,
+				ResponseHeaders: map[string]string{
+					"X-Mocked-By": "fakeserver-proxy",
+				},
+			},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	resp, _ := http.Get(srv.URL + "/x")
+	resp.Body.Close()
+	if got := resp.Header.Get("X-Mocked-By"); got != "fakeserver-proxy" {
+		t.Errorf("response X-Mocked-By=%q", got)
+	}
+}
+
+func TestProxy_BodyLimit_413(t *testing.T) {
+	upstream := echoUpstream(t)
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"POST"}, Path: "/x",
+			Proxy:  &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/x", "text/plain", strings.NewReader("this body is more than sixteen bytes long"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 413 {
+		t.Errorf("status=%d want 413", resp.StatusCode)
+	}
+}
+
+func TestProxy_Timeout_504(t *testing.T) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(500 * time.Millisecond):
+			w.WriteHeader(200)
+		}
+	}))
+	defer slow.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"GET"}, Path: "/x",
+			Proxy:  &config.ProxyConfig{Target: slow.URL, Timeout: "50ms"},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 504 {
+		t.Errorf("timeout status=%d want 504", resp.StatusCode)
+	}
+}
+
+func TestProxy_PreserveHost(t *testing.T) {
+	var sawHost string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawHost = r.Host
+		w.WriteHeader(200)
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method: []string{"GET"}, Path: "/x",
+			Proxy:  &config.ProxyConfig{Target: upstream.URL, PreserveHost: true},
+		}},
+	}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/x", nil)
+	resp, _ := http.DefaultClient.Do(req)
+	resp.Body.Close()
+	// PreserveHost: upstream should see the client's Host (the fakeserver listener address)
+	want := strings.TrimPrefix(srv.URL, "http://")
+	if sawHost != want {
+		t.Errorf("preserveHost: upstream saw Host=%q want %q", sawHost, want)
 	}
 }
