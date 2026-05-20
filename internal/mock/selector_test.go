@@ -102,7 +102,9 @@ func TestSelector_Weighted_Distribution(t *testing.T) {
 		{OrigIdx: 0, Weight: 1},
 		{OrigIdx: 1, Weight: 9},
 	}
-	const N = 1000
+	// N=3000 keeps 3σ comfortably inside the ±5% tolerance, halving CI flake
+	// risk vs. the plan's nominal N=1000.
+	const N = 3000
 	hit := map[int]int{}
 	for i := 0; i < N; i++ {
 		idx, err := sel.Pick(cases)
@@ -126,7 +128,9 @@ func TestSelector_Weighted_Distribution(t *testing.T) {
 func TestSelector_Weighted_ZeroDefaultsToOne(t *testing.T) {
 	sel := NewSelector("weighted")
 	cases := makeCases(0, 0)
-	const N = 1000
+	// N=3000 keeps 3σ comfortably inside the ±5% tolerance, halving CI flake
+	// risk vs. the plan's nominal N=1000.
+	const N = 3000
 	hit := map[int]int{}
 	for i := 0; i < N; i++ {
 		idx, _ := sel.Pick(cases)
