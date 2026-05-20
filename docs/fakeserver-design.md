@@ -13,6 +13,7 @@
 | 2026-05-19 | v0.3-phase1-applied | inhere | Phase 1 落地：项目骨架 + internal/cli + 极薄 cmd 入口 + echo（rux v2 MountEchoRoutes）+ admin /healthz + E2E。rux 实际为 v2.0.0（module path `github.com/gookit/rux/v2`），与原 design 假设接口名不同，详见 §13 已落地条目 |
 | 2026-05-19 | v0.3-phase2-applied | inhere | Phase 2 落地：internal/config 包（schema/loader/include/merge/defaults/validate）+ cli init/check/routes + serve 接入 -c。mock 路由仅打印摘要，实际响应留 Phase 3 |
 | 2026-05-19 | v0.3-phase3-applied | inhere | Phase 3 落地：internal/tpl（含 22+ 自有函数 + gofakeit 桥接 + 双渲染器）+ internal/mock（router/responder）+ serve 接入。单一响应模式 mock 真正生效；cases/proxy 留 Phase 4 |
+| 2026-05-19 | v0.3-phase4-applied | inhere | Phase 4 落地：internal/mock 增 matcher（expr）+ selector（四 strategy）+ cases.go；internal/proxy 整包（ReverseProxy + 全量字段）；config.Validate 增 when 语法预检；新增 config.Warn 警告通道（first-match 无兜底、proxy.target 私网 info）；cli 装配 proxy.Mount 与 Warn 输出 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1223,6 +1224,16 @@ if seed == 0 {
 - **rux v2 responseWriter 行为**：`WriteHeader(code)` 缓存状态码，到首次 `Write` 才真正发出。零 body 响应需 `Write(nil)` 触发 `ensureWriteHeader`——已在 `mock.Respond` 末尾处理
 - **easytpl 接入范围**：仅复用 `tplfunc.StdFuncMap()` 作为基础 FuncMap；**不**使用 easytpl.Renderer 的 layout/partial 能力。fakeserver 的 text/html 双渲染器直接基于 stdlib `text/template` + `html/template`
 - **Phase 3 边界**：mock router 跳过含 `cases` 或 `proxy` 字段的 route（Phase 4 处理）；未匹配请求仍走 echo `/*path` 兜底；模板里 `.env` Phase 3 为空 map（v0.2 才接 env 文件），`.osenv` 与 `osenv` 函数完整可用且受 osenvWhitelist 约束
+
+### 已落地（Phase 4 阶段确认）
+
+1. **expr-lang/expr v1.17.8 实际 API**：`Compile(src, AsBool(), Env(...))` / `Run(prog, env any) (any, error)`。字段访问平铺命名空间（`request.query.x`，无前置点号）。运行期错误（字段缺失、类型不匹配）按情形返回 `(nil, error)` 或 `(nil, nil)`——本工程的 `Matcher.Evaluate` 统一降级为 `(false, err)`，调用方 warn 跳过单条 case，不影响整条路由。
+2. **ReverseProxy + Director 链路**：path 改写顺序锁定为 `stripPathPrefix` → `rewrite`（首匹配）→ host 切换；template 渲染**只在 `headers/responseHeaders` value 上**生效（design §9.2 明确）。其余字段 `target/rewrite/stripPathPrefix/timeout/...` 均为字面量。
+3. **超时实现双层**：`Transport.ResponseHeaderTimeout` + 请求级 `context.WithTimeout`。ErrorHandler 通过 `errors.Is(perr, context.DeadlineExceeded || context.Canceled)` 加字符串兜底区分 504 vs 502。
+4. **bodyLimit 在 rux handler 入口前置强制**：放弃 `http.MaxBytesReader`（其错误经 ReverseProxy 的 body 拷贝触发，路径不可控）。改为 `readUpTo(buf of size limit+1)` 读满探测，超限 → 413 + JSON 错误体，body 不打到上游。
+5. **`config.Warn(cfg) []string` 与 `Validate(cfg) []error` 并列**：前者只产生 stderr advisories、不影响 exit code；后者产生终止性错误。`first-match` 所有 case 都带 `when`（无兜底）触发 warn；`proxy.target` 私网/localhost 触发 info 级 warn（不阻止启动）。
+6. **proxy.headers 模板 ctx 缺 `body/bodyRaw/params`**：proxy 包独立的 `buildProxyRenderCtx(req)` 不读 req.Body（避免 drain），可用键为 method/path/host/headers/query/ip。需要 body 参与 header 模板的场景请改用 mock route 而非 proxy。
+7. **Phase 4 边界**：未引入 `fsnotify`；未引入中间件；admin 端点不变；热加载、CORS、recoverer、bodylimit 中间件全部留 Phase 5。`config.Warn` 已就位但只挂在 serve / check 启动期 stderr——运行期警告路径（如 matcher 运行期 err）走 `log.Printf` 写 stderr。
 
 ### 待评审
 

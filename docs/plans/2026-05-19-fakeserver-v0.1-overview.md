@@ -30,7 +30,7 @@
 | **1** | 项目骨架 + 零配置 echo | `cmd/fakeserver/`、`internal/cli/`、`internal/echo/`、`internal/admin/` + `serve` 子命令 | rux/v2、gcli/v3、goutil | — | ~400 行 | ✅ 已完成 |
 | **2** | 配置加载 + 路由摘要 | `internal/config/`、`internal/cli/{init,check,routes}.go` | titanous/json5 | Phase 1 | ~800 行 | ✅ 已完成 (commit 4182891..b316e98) |
 | **3** | 模板与单一响应 mock | `internal/tpl/`（含 faker）、`internal/mock/{router,responder}.go` | easytpl、gofakeit | Phase 2 | ~900 行 | ✅ 已完成 (commit 37839c8..732691e) |
-| **4** | 多响应 + 条件分支 + bodyFile + proxy | `internal/mock/{selector,matcher}.go`、`internal/proxy/` | expr-lang/expr | Phase 3 | ~600 行 | 待开始 |
+| **4** | 多响应 + 条件分支 + bodyFile + proxy | `internal/mock/{selector,matcher}.go`、`internal/proxy/` | expr-lang/expr | Phase 3 | ~600 行 | ✅ 已完成 (commit 85e01d3..f5a454c) |
 | **5** | 运行时与可观测性 | `internal/middleware/`、`internal/config/watcher.go`、admin `/routes` | fsnotify | Phase 4 | ~500 行 | 待开始 |
 
 总计：v0.1 MVP ≈ 3200 行代码（含测试），分 5 期落地。
@@ -218,6 +218,32 @@
 7. `go test ./...` 通过；`internal/{mock,proxy}` 单元测试覆盖率 ≥ 80%
 
 **对 design 章节的映射**：§3.2 cases/strategy 段、§4.5 cases 选择错误处理表、§9 全章（Proxy 路由）、§6 错误处理 cases-no-match / proxy 上游错误两行。
+
+**实际落地偏差**：
+
+- **expr v1.17.8 API 与 plan 假设零偏差**：`Compile(src, AsBool(), Env(stubEnv))` 返回 `(*vm.Program, error)`；`Run(prog, env any) (any, error)`；`AsBool()` 是 `Option`；`Env(map[string]any)` 可声明类型上下文。所有签名与 plan 假设吻合。
+- **expr 运行期"字段缺失" vs "嵌套 nil"行为差异**：`request.query.nope`（query 是空 map）→ `(nil, nil)` 静默返回；而 `request.query.nope`（query 不存在）→ `(nil, error "cannot fetch nope from <nil>")`。两条路径殊途同归——`Matcher.Evaluate` 都返回 `ok=false`，调用方 warn 跳过。
+- **`tpl.BuildRenderCtx` 会 drain req.Body**：在 proxy Director 阶段调用会消耗要转发的请求体。落地解决方案是 `internal/proxy/proxy.go` 新增 `buildProxyRenderCtx(req)` helper，只从 method/path/host/headers/query/ip 字段构建 ctx，**不读 body**。已知限制：proxy 模板访问 `.request.body/bodyRaw/params` 会得到空——design §9 已经只承诺 headers/responseHeaders value 的模板渲染。
+- **MaxBytesReader 不适用于 ReverseProxy 的 bodyLimit 强制**：MaxBytesReader 的错误经由 ReverseProxy 的 body 拷贝在 ErrorHandler 之外冒出，无法干净返回 413。落地方案：在 rux handler 入口用 `readUpTo(buf of size limit+1)` 前置读取，超限直接 413+JSON，body 未达上游。
+- **`parseByteSize` 内联实现**：不引入 `humanize` 或 `goutil/byteutil`。仅支持大写后缀（B/KB/MB/GB/TB + KiB/MiB/GiB/TiB），无单位 fallback 到纯字节。`"16b"`/`"16XB"` 等非法形态显式报错。
+- **timeout vs dial-fail 区分**：ErrorHandler 通过 `errors.Is(perr, context.DeadlineExceeded || context.Canceled)` 加字符串兜底 `strings.Contains(err, "timeout"|"deadline")` 双层检测，分别映射 504/502。
+- **`config.Warn(cfg) []string` 警告通道与 `Validate` 并列**：警告只写 stderr、不影响 exit code。serve / check 子命令在 Validate 通过后调用 Warn，每条以 `warn: ` 前缀输出。
+- **Phase 4 commit 流水（11 个 commit）**：
+  - Task 1: 85e01d3 (引入 expr + smoke) + a4ea93c (smoke 防御断言)
+  - Task 2: 14e6878 (Matcher 实现) + 271cf6d (nil-safe doc + log 缺字段 err)
+  - Task 3: b34b47f (selector 四种 strategy) + 56555a2 (分布测试 N=3000)
+  - Task 4: 334f318 (RespondCases) + 1c79add (headers 合并测试 + 抑制 log 噪声)
+  - Task 5: 5244fdf (router cases 分支 + Validate when 预检 + Warn) + efaf9a8 (错误前缀对齐 + 测试覆盖)
+  - Task 6: a2222e9 (rewrite 编译) + 020bb3e (空 pattern 拒绝 + 文档分隔语义)
+  - Task 7: 48fd323 (proxy 基础透传 + 502)
+  - Task 8: 006ad08 (全量字段) + 71b318d (ip ctx + 严格 parseByteSize + 模板 err log)
+  - Task 9: 793fbb8 (cli 装配 + E2E) + f5a454c (assembleRouter 注释)
+
+**Phase 4 测试覆盖**：
+- `internal/mock`: 91.3% 覆盖（≥ 80% DoD）
+- `internal/proxy`: 85.7% 覆盖（≥ 80% DoD）
+- `internal/config`: 既有覆盖维持
+- 全包 `go test ./...` 全绿；新增 ~50 个测试用例（含 cases / selector / matcher / rewrite / proxy 全量字段 + E2E）
 
 ---
 
