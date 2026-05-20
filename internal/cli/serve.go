@@ -66,7 +66,7 @@ func assembleRouter(cfg *config.Config, renderer tpl.Renderer) *rux.Router {
 	r := rux.New()
 	_ = mock.Mount(r, cfg, renderer)  // single-response + cases
 	_ = proxy.Mount(r, cfg, renderer) // proxy routes
-	admin.Mount(r)
+	admin.Mount(r, cfg)
 	echo.Mount(r)
 	return r
 }
