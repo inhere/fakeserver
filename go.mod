@@ -5,6 +5,7 @@ go 1.26.3
 require (
 	github.com/brianvoe/gofakeit/v7 v7.15.0
 	github.com/expr-lang/expr v1.17.8
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/gookit/easytpl v1.1.1
 	github.com/gookit/gcli/v3 v3.3.1
