@@ -4,6 +4,9 @@ go 1.26.3
 
 require (
 	github.com/brianvoe/gofakeit/v7 v7.15.0
+	github.com/expr-lang/expr v1.17.8
+	github.com/google/uuid v1.6.0
+	github.com/gookit/easytpl v1.1.1
 	github.com/gookit/gcli/v3 v3.3.1
 	github.com/gookit/goutil v0.7.5
 	github.com/gookit/rux/v2 v2.0.0
@@ -11,10 +14,8 @@ require (
 )
 
 require (
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gookit/cliui v0.2.3 // indirect
 	github.com/gookit/color v1.6.1 // indirect
-	github.com/gookit/easytpl v1.1.1 // indirect
 	github.com/gookit/filter v1.2.3 // indirect
 	github.com/gookit/validate v1.5.7 // indirect
 	github.com/monoculum/formam v3.5.5+incompatible // indirect
