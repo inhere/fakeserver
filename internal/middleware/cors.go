@@ -14,6 +14,12 @@ import (
 //   - Methods/Headers populate the preflight Access-Control-Allow-* responses
 //   - AllowCredentials controls the ACAC header
 //
+// SECURITY WARNING: combining AllowCredentials=true with an empty Origins
+// list (reflect-mode) is INSECURE on any network-accessible deployment — any
+// origin can issue credentialed requests. fakeserver is local-only dev
+// tooling so this is acceptable by default, but document/audit if exposing
+// the listener beyond loopback.
+//
 // Path-level behavior: requests to /__fakeserver/* are exempted entirely
 // (no headers added, no preflight rewrite). This protects the internal
 // endpoints from being usable as a CORS bypass surface from arbitrary
@@ -67,11 +73,15 @@ func CORS(opts CORSOpts) func(http.Handler) http.Handler {
 				}
 				w.Header().Set("Access-Control-Allow-Methods", allowMethods)
 				w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
+				w.Header().Set("Access-Control-Max-Age", "600") // browser caches preflight for 10 min
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
-			// Route handled OPTIONS — flush its response, add CORS headers
+			// Route handled OPTIONS — flush its response, then add CORS headers
+			// Use Del+Add to avoid duplicating single-value headers (e.g. Content-Type)
+			// when the downstream handler set them explicitly.
 			for k, v := range buf.header {
+				w.Header().Del(k)
 				for _, vv := range v {
 					w.Header().Add(k, vv)
 				}

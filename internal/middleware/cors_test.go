@@ -109,3 +109,41 @@ func TestCORS_AllowCredentials(t *testing.T) {
 		t.Errorf("ACAC=%q want true", got)
 	}
 }
+
+// TestCORS_OptionsNoOrigin — OPTIONS request without Origin header (e.g.
+// curl without -H "Origin:"). Should NOT 204-rewrite to preflight: there's
+// no cross-origin context; route's response should pass through. If the
+// route returns 404, we still get 404 (no CORS rewrite because there's no
+// preflight semantic).
+//
+// Note: this captures the current implementation's behavior — no Origin
+// means no CORS injection. The 404→204 rewrite logic stays the same; the
+// preflight headers go on regardless of Origin presence since they apply
+// to the preflight protocol itself.
+func TestCORS_OptionsNoOrigin(t *testing.T) {
+	mw := CORS(CORSOpts{})(handler200())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("OPTIONS", "/x", nil) // no Origin
+	mw.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Errorf("status=%d want 200 (route handled OPTIONS, no Origin → no CORS injection but route still wins)", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("no Origin → no ACAO; got %q", got)
+	}
+}
+
+// TestCORS_PreflightHasMaxAge confirms the Max-Age header default.
+func TestCORS_PreflightHasMaxAge(t *testing.T) {
+	mw := CORS(CORSOpts{})(handler404())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("OPTIONS", "/x", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	mw.ServeHTTP(rec, req)
+	if rec.Code != 204 {
+		t.Errorf("status=%d want 204", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Max-Age"); got == "" {
+		t.Errorf("Access-Control-Max-Age missing on preflight")
+	}
+}
