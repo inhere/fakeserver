@@ -14,6 +14,7 @@
 | 2026-05-19 | v0.3-phase2-applied | inhere | Phase 2 落地：internal/config 包（schema/loader/include/merge/defaults/validate）+ cli init/check/routes + serve 接入 -c。mock 路由仅打印摘要，实际响应留 Phase 3 |
 | 2026-05-19 | v0.3-phase3-applied | inhere | Phase 3 落地：internal/tpl（含 22+ 自有函数 + gofakeit 桥接 + 双渲染器）+ internal/mock（router/responder）+ serve 接入。单一响应模式 mock 真正生效；cases/proxy 留 Phase 4 |
 | 2026-05-19 | v0.3-phase4-applied | inhere | Phase 4 落地：internal/mock 增 matcher（expr）+ selector（四 strategy）+ cases.go；internal/proxy 整包（ReverseProxy + 全量字段）；config.Validate 增 when 语法预检；新增 config.Warn 警告通道（first-match 无兜底、proxy.target 私网 info）；cli 装配 proxy.Mount 与 Warn 输出 |
+| 2026-05-19 | v0.3-phase5-applied | inhere | Phase 5 落地：internal/middleware（recoverer/logger/cors/bodylimit/chain/holder）+ internal/config/watcher.go + admin /__fakeserver/routes + 启动 banner + serve --quiet/--no-cors/--no-watch flag。v0.1 MVP 完整闭环。 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1234,6 +1235,18 @@ if seed == 0 {
 5. **`config.Warn(cfg) []string` 与 `Validate(cfg) []error` 并列**：前者只产生 stderr advisories、不影响 exit code；后者产生终止性错误。`first-match` 所有 case 都带 `when`（无兜底）触发 warn；`proxy.target` 私网/localhost 触发 info 级 warn（不阻止启动）。
 6. **proxy.headers 模板 ctx 缺 `body/bodyRaw/params`**：proxy 包独立的 `buildProxyRenderCtx(req)` 不读 req.Body（避免 drain），可用键为 method/path/host/headers/query/ip。需要 body 参与 header 模板的场景请改用 mock route 而非 proxy。
 7. **Phase 4 边界**：未引入 `fsnotify`；未引入中间件；admin 端点不变；热加载、CORS、recoverer、bodylimit 中间件全部留 Phase 5。`config.Warn` 已就位但只挂在 serve / check 启动期 stderr——运行期警告路径（如 matcher 运行期 err）走 `log.Printf` 写 stderr。
+
+### 已落地（Phase 5 阶段确认）
+
+1. **fsnotify Windows rename 行为**：编辑器原子保存（写 tmp → rename）在 Windows 触发 5 事件序列（CREATE.tmp/WRITE.tmp/REMOVE/RENAME.tmp/CREATE）。300ms 防抖窗口充分聚合。
+2. **CORS OPTIONS 后置策略**：用 `bufferedWriter` 在 middleware 层拦截路由响应；路由返回 404 时改写为 204 + preflight headers；否则透传仅追加 CORS header。无需在路由层注册 OPTIONS catch-all。
+3. **Holder 原子 swap**：`atomic.Pointer[http.Handler]` 实现零拷贝热替换。在途请求继续走旧 handler 直至完成；新请求走新 handler。
+4. **watcher 目录订阅**：单文件 fsnotify Add 在 rename-in-place 后失效；改为订阅每条 SourcePath 的所在目录（去重），事件回调里用 wanted map 过滤回 path 集合。
+5. **admin.Mount 签名升级**：从 `Mount(r)` 到 `Mount(r, cfg)`，让 `/__fakeserver/routes` handler 闭包持有 cfg 引用。每次 watcher swap 调用一次 Mount（在 assembleHandler 内），/routes 总返回最新 cfg。
+6. **`parseByteSize → ParseByteSize` 导出**：Phase 4 proxy 包私有函数提升为 `proxy.ParseByteSize`，被 cli 包 `parseMaxBodySize` 复用。
+7. **`cors: false` 配置生效**：`corsOptsFromCfg(cfg) → (CORSOpts, bool)` 返回 enabled 标志；assembleHandler 据此决定是否添加 CORS 中间件，避免 default 分支误把 false 当 reflect-mode。
+8. **v0.1 MVP 完整闭环 E2E 通过**：综合 config（mock + cases + proxy + bodyFile）启动 → 5 类请求验证 → 文件系统编辑 + 300ms 防抖 + holder swap → 新路由生效 → 旧路由仍工作。该测试覆盖 Phase 1-5 全部模块协作。
+9. **存量 bug `Route.SourceFile`**（v0.2 修复，bd lite-tools-gko）：loader 用 JSON round-trip 构造 Config，`json:"-"` 字段被吞掉，导致 `bodyFile` 相对路径在 CWD ≠ config 目录时退化。v0.1 用绝对路径或 CWD 对齐 workaround。
 
 ### 待评审
 

@@ -31,7 +31,7 @@
 | **2** | 配置加载 + 路由摘要 | `internal/config/`、`internal/cli/{init,check,routes}.go` | titanous/json5 | Phase 1 | ~800 行 | ✅ 已完成 (commit 4182891..b316e98) |
 | **3** | 模板与单一响应 mock | `internal/tpl/`（含 faker）、`internal/mock/{router,responder}.go` | easytpl、gofakeit | Phase 2 | ~900 行 | ✅ 已完成 (commit 37839c8..732691e) |
 | **4** | 多响应 + 条件分支 + bodyFile + proxy | `internal/mock/{selector,matcher}.go`、`internal/proxy/` | expr-lang/expr | Phase 3 | ~600 行 | ✅ 已完成 (commit 85e01d3..f5a454c) |
-| **5** | 运行时与可观测性 | `internal/middleware/`、`internal/config/watcher.go`、admin `/routes` | fsnotify | Phase 4 | ~500 行 | 待开始 |
+| **5** | 运行时与可观测性 | `internal/middleware/`、`internal/config/watcher.go`、admin `/routes` | fsnotify | Phase 4 | ~500 行 | ✅ 已完成 (commit 2f784d3..eb10a80) |
 
 总计：v0.1 MVP ≈ 3200 行代码（含测试），分 5 期落地。
 
@@ -287,6 +287,48 @@
 8. **v0.1 MVP 闭环 E2E**：写一个综合 config（含 mock 单响应 + cases + proxy + bodyFile），跑完整测试链路：启动 → 请求各种 route → 编辑 config 热加载 → 再次请求
 
 **对 design 章节的映射**：§5.2 热加载、§5.3 请求日志、§5.4 CORS、§5.6 admin `/routes` + banner、§6 错误处理完整表、§7 测试策略 `internal/middleware/*_test.go` 与 cmd e2e 段。
+
+**实际落地偏差**：
+
+- **fsnotify v1.10.1 Windows 编辑器原子保存事件序列锁定**（Task 1 smoke）：编辑器"写 tmp → rename"操作在 Windows 触发 5 事件序列：`CREATE.tmp` → `WRITE.tmp` → `REMOVE` → `RENAME.tmp` → `CREATE`。300ms 防抖窗口足以聚合。
+- **recoverer 增加 `stack` JSON 字段对齐 DoD #3**（Task 2 review-fix）：plan 任务代码原只输出 `{error, route, panic}`，DoD 明确要求 `{error, route, panic, stack}`。修复后 `debug.Stack()` 仅调用一次，stderr 日志与响应体使用同一份 stack。
+- **logger 实现 `http.Flusher` / `http.Hijacker` 透传**（Task 3 review-fix）：原 `loggingResponseWriter` 仅嵌入 `http.ResponseWriter`，会遮蔽 Flusher 接口——影响 proxy 路由的 chunked 响应。修复后显式实现 Flush/Hijack 方法，条件转发到底层 writer。
+- **CORS 默认行为完整化**（Task 4 review-fix）：CORSOpts 文档增加 reflect-mode + AllowCredentials 的 CSRF 警告；OPTIONS-handled-by-route 分支用 `Del+Add` 避免下游 Content-Type 重复；preflight 短路加 `Access-Control-Max-Age: 600`。
+- **`readUpTo` off-by-one bug 修复**（Task 5 review-fix）：原实现在 body 恰好为 `max+1` 字节时返回 `(max+1, nil)`，绕过 BodyLimit 1 字节。同时影响 `internal/middleware/bodylimit.go` 与 `internal/proxy/proxy.go`，两处同步修复。
+- **Holder 用 `atomic.Pointer[http.Handler]` 实现热替换**（Task 6）：泛型原子指针保证 Swap/ServeHTTP 并发安全；初始 nil 时返回 503 + JSON `{error: "server not ready"}`。
+- **Watcher 订阅父目录而非单文件**（Task 7）：单文件 inotify 订阅在 rename-in-place 后失效；改为订阅 `filepath.Dir(path)`（去重）+ 事件回调里用 wanted map 过滤路径。
+- **Watcher Stop 后 timer 仍可触发一次**（Task 7 review-doc）：`time.Timer.Stop()` 不等待已 expired 的 AfterFunc 回调；文档明确此 caveat，调用方需在 onChange 内部检查 stopped 标志。
+- **admin.Mount 签名升级为 `(r, cfg)`**（Task 8）：让 `/__fakeserver/routes` handler 闭包绑定 cfg；Phase 1 healthz 测试改 `Mount(r, nil)`。
+- **`cors: false` 配置生效**（Task 9 review-fix）：原 `corsOptsFromCfg` 在 `bool(false)` 时返回 reflect-mode（错误），修正为 `(opts, enabled)` 双返回；assembleHandler 据此决定是否添加 CORS 中间件。
+- **`proxy.parseByteSize → ParseByteSize` 导出**（Task 9）：cli 包 `parseMaxBodySize` 复用，避免 5 行代码两处重复。
+- **`Route.SourceFile` 始终为空**（Phase 2 存量 bug，Task 9 E2E review 发现）：`loader.go` 用 JSON round-trip 构造 Config，`json:"-"` 字段在 round-trip 中丢失。E2E 测试用绝对路径绕开。已记入 bd issue `lite-tools-gko`，留 v0.2 修复。
+- **lite-tools-5an vet 警告清理**：Phase 4 留下的 8 处 `using resp before checking for errors` 警告全部修复，`go vet ./...` 零告警。
+
+**Phase 5 测试覆盖**：
+- `internal/middleware`: 88.5% 覆盖（≥ 80% DoD）
+- `internal/config`: 测试覆盖维持
+- 全包 `go test ./...` 全绿；v0.1 MVP 闭环 E2E（mock + cases + proxy + bodyFile + 热加载） PASS
+
+**Phase 5 commit 流水（~18 个 commit，从 `2f784d3` 到 Task 10 收尾）**：
+- Task 1: 2f784d3 (fsnotify smoke)
+- Task 2: 661f566 (recoverer 初版) + b8b09a7 (加 stack 字段对齐 DoD)
+- Task 3: c07678f (logger) + 0b6f7c5 (Flusher/Hijacker 透传)
+- Task 4: 945739f (cors 初版) + 79af1e5 (CSRF 警告 + Max-Age)
+- Task 5: d262c67 (bodylimit) + ece3ffc (readUpTo off-by-one 修复)
+- Task 6: 6b42e0a (chain + holder)
+- Task 7: 9497961 (watcher) + 6893a0b (Stop/armOrReset 文档)
+- Task 8: 966c6c1 (admin /routes + banner)
+- Task 9: 04e62c3 (serve 整合) + 4234df6 (cors:false + 测试 + polling)
+- Task 10: eb10a80 (vet 清理) + 本次文档回写
+
+**v0.1 MVP 完整闭环**：本 Phase 完成后，fakeserver v0.1 MVP 全部里程碑达成：
+- ✅ 零配置 echo（Phase 1）
+- ✅ JSON5 配置 + Validate + 子命令（Phase 2）
+- ✅ 模板渲染 + 单一响应 mock + faker（Phase 3）
+- ✅ 多响应 + 条件分支 + Proxy（Phase 4）
+- ✅ 中间件全套 + 热加载 + admin /routes（Phase 5）
+
+v0.2 路线图入口已就绪：env 文件 + osenv 完整 + 项目注册（design §8 / §10 / §11）；`Route.SourceFile` bug 修复（bd lite-tools-gko）。
 
 ---
 
