@@ -239,7 +239,7 @@ func TestLoadDefault_PicksFirstExistingCandidate(t *testing.T) {
 	if err := os.WriteFile(target, []byte(`{"routes":[{"method":"GET","path":"/x","body":"x"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := LoadDefault(tmpDir)
+	cfg, err := LoadDefault(tmpDir, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestLoadDefault_PicksFirstExistingCandidate(t *testing.T) {
 
 func TestLoadDefault_NoneExistReturnsNilNilNoError(t *testing.T) {
 	tmpDir := t.TempDir()
-	cfg, err := LoadDefault(tmpDir)
+	cfg, err := LoadDefault(tmpDir, "")
 	if err != nil {
 		t.Fatalf("unexpected error when no defaults exist: %v", err)
 	}
@@ -404,5 +404,50 @@ func TestLoad_NoEnvFile_EmptyEnv(t *testing.T) {
 	}
 	if cfg.EnvSource != "" {
 		t.Errorf("no env file → empty EnvSource; got %q", cfg.EnvSource)
+	}
+}
+
+func TestLoad_EnvName_SelectsSegment(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	envPath := filepath.Join(tmp, DefaultEnvFileName)
+	if err := os.WriteFile(cfgPath, []byte(`{ routes: [] }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(envPath, []byte(`{ $default: { host: "d" }, dev: { token: "DEV" }, staging: { token: "STG" } }`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load([]string{cfgPath}, "staging", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Env["token"] != "STG" {
+		t.Errorf("token=%v want STG", cfg.Env["token"])
+	}
+	if cfg.Env["host"] != "d" {
+		t.Errorf("host=%v want d (from $default)", cfg.Env["host"])
+	}
+}
+
+func TestLoad_EnvFile_AddedToSourcePaths(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	envPath := filepath.Join(tmp, DefaultEnvFileName)
+	_ = os.WriteFile(cfgPath, []byte(`{ routes: [] }`), 0644)
+	_ = os.WriteFile(envPath, []byte(`{ dev: { x: 1 } }`), 0644)
+
+	cfg, err := Load([]string{cfgPath}, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, p := range cfg.SourcePaths {
+		if filepath.Clean(p) == filepath.Clean(envPath) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("env path not in SourcePaths: %v", cfg.SourcePaths)
 	}
 }

@@ -78,19 +78,20 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 	}
 
 	// v0.2 Phase 1: auto-load fakeserver.env.json5 next to the primary
-	// config file. envName="" so $active / first-segment selection
-	// applies; Phase 2 wires CLI/env-var to pass real envName.
+	// config file. Phase 2: envName is now passed through from CLI/env-var.
 	if len(absSources) > 0 {
 		envPath := filepath.Join(filepath.Dir(absSources[0]), DefaultEnvFileName)
-		envMap, _, eerr := LoadEnvFile(envPath, "")
+		envMap, _, eerr := LoadEnvFile(envPath, envName)
 		if eerr != nil {
 			return nil, fmt.Errorf("env file: %w", eerr)
 		}
 		cfg.Env = envMap
 		// EnvSource is only set when the file existed (LoadEnvFile returns
 		// empty map for missing files; we want EnvSource="" in that case).
+		// Also append to SourcePaths so the watcher monitors the env file.
 		if _, sterr := os.Stat(envPath); sterr == nil {
 			cfg.EnvSource = envPath
+			cfg.SourcePaths = append(cfg.SourcePaths, envPath)
 		}
 	}
 
@@ -403,11 +404,11 @@ func cyclePath(visiting map[string]bool, dup string) string {
 // DefaultPaths) and loads the first one that exists. Returns (nil, nil)
 // — not an error — when none exist, so the caller (cli/serve.go) can
 // degrade to echo-only mode silently.
-func LoadDefault(cwd string) (*Config, error) {
+func LoadDefault(cwd, envName string) (*Config, error) {
 	for _, rel := range DefaultPaths() {
 		abs := filepath.Join(cwd, rel)
 		if _, err := os.Stat(abs); err == nil {
-			return Load([]string{abs}, "", nil)
+			return Load([]string{abs}, envName, nil)
 		}
 	}
 	return nil, nil

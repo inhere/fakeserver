@@ -170,7 +170,7 @@ func corsOptsFromCfg(cfg *config.Config) (middleware.CORSOpts, bool) {
 func loadServeConfig(opts serveOptions) (*config.Config, error) {
 	paths := splitConfigPaths(opts.ConfigFlag)
 	if len(paths) > 0 {
-		cfg, err := config.Load(paths, "", nil)
+		cfg, err := config.Load(paths, opts.EnvName, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +183,7 @@ func loadServeConfig(opts serveOptions) (*config.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getwd: %w", err)
 	}
-	cfg, err := config.LoadDefault(wd)
+	cfg, err := config.LoadDefault(wd, opts.EnvName)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +245,7 @@ func runServe(opts serveOptions) error {
 	if !opts.NoWatch && cfg != nil && len(cfg.SourcePaths) > 0 {
 		paths := cfg.SourcePaths
 		watcher, err = config.NewWatcher(paths, 300*time.Millisecond, func() {
-			newCfg, lerr := config.Load(paths, "", nil)
+			newCfg, lerr := config.Load(paths, opts.EnvName, nil)
 			if lerr != nil {
 				fmt.Fprintln(os.Stderr, "warn: reload load err:", lerr)
 				return
