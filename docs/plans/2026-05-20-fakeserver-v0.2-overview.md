@@ -103,7 +103,7 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 - Task 3: `4e1936c` (schema 字段 + envfile 骨架)
 - Task 4: `4c38538` (LoadEnvFile 核心) + `65e6d52` (类型严格校验)
 - Task 5: `abacf29` (@include 拒绝) + `105f29f` (\@xxx 转义正向测试)
-- Task 6: `7c5a0f9` (loader 集成) + `<docs commit SHA — 本次提交>`
+- Task 6: `7c5a0f9` (loader 集成) + `8e88411` (docs 回写)
 
 ---
 
