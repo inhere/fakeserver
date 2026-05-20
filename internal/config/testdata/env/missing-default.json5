@@ -1,0 +1,8 @@
+{
+  dev: {
+    apiHost: "dev.local",
+  },
+  staging: {
+    apiHost: "stage.api.com",
+  },
+}

@@ -1,0 +1,6 @@
+{
+  $default: {
+    apiHost: "localhost",
+    timeout: "5s",
+  },
+}

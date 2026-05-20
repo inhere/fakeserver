@@ -1,0 +1,14 @@
+{
+  $active: "staging",
+  $default: {
+    apiHost: "localhost",
+  },
+  dev: {
+    apiHost: "dev.local",
+    token: "dev-xxx",
+  },
+  staging: {
+    apiHost: "stage.api.com",
+    token: "stg-yyy",
+  },
+}

@@ -1,0 +1,14 @@
+{
+  $default: {
+    apiHost: "localhost",
+    timeout: "5s",
+  },
+  dev: {
+    apiHost: "localhost:5090",
+    token: "dev-xxx",
+  },
+  staging: {
+    apiHost: "stage.api.com",
+    token: "stg-yyy",
+  },
+}
