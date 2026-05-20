@@ -266,3 +266,47 @@ func TestLoad_BodyFileRelativePath_ResolvedAgainstConfigDir(t *testing.T) {
 		t.Errorf("SourceFile = %q, want %q", got, want)
 	}
 }
+
+// TestLoad_BodyFile_FromIncludedFile_RelativePathResolved 验证 v0.2 Phase 1
+// SourceFile 修复对 @include 链中的 bodyFile 也生效——@included routes.json5
+// 中的相对 bodyFile "data.txt" 应解析为 routes.json5 所在目录的 data.txt，
+// 而非主 cfg.json5 的目录。当前 fixture 两者目录相同，重点是 SourceFile
+// 字段正确指向 routes.json5（让 resolveRoutePath 拿到正确的 baseDir）。
+func TestLoad_BodyFile_FromIncludedFile_RelativePathResolved(t *testing.T) {
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+
+	cfgPath, err := filepath.Abs("testdata/source/with-include/cfg.json5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	subPath, err := filepath.Abs("testdata/source/with-include/routes.json5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 切到无关 CWD，验证相对路径不依赖 CWD
+	otherDir := t.TempDir()
+	if err := os.Chdir(otherDir); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load([]string{cfgPath}, "", nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(cfg.Routes))
+	}
+
+	// SourceFile 应指向被 include 的 routes.json5（不是主 cfg.json5）
+	got := filepath.Clean(cfg.Routes[0].SourceFile)
+	want := filepath.Clean(subPath)
+	if got != want {
+		t.Errorf("SourceFile = %q, want %q (include 的 route 应保留来源文件)", got, want)
+	}
+
+	// Validate 不应报错（bodyFile 能找到 data.txt）
+	if errs := Validate(cfg); len(errs) > 0 {
+		t.Fatalf("validate err: %v", errs)
+	}
+}
