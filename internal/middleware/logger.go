@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -56,4 +58,24 @@ func (lw *loggingResponseWriter) Write(b []byte) (int, error) {
 		lw.wroteHeader = true // implicit 200
 	}
 	return lw.ResponseWriter.Write(b)
+}
+
+// Flush passes through to the underlying ResponseWriter when it implements
+// http.Flusher. This matters for streaming/chunked responses (proxy upstream
+// responses, SSE handlers): without this method, the embedded
+// ResponseWriter's Flusher would be shadowed.
+func (lw *loggingResponseWriter) Flush() {
+	if f, ok := lw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack passes through to the underlying ResponseWriter when it implements
+// http.Hijacker. Reserved for WebSocket upgrade handlers. Returns an
+// error if the underlying writer doesn't support hijacking.
+func (lw *loggingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := lw.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, http.ErrNotSupported
 }

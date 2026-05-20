@@ -72,3 +72,45 @@ func TestLogger_NilOutDoesNotPanic(t *testing.T) {
 		httptest.NewRequest("GET", "/x", nil),
 	)
 }
+
+// flushableRecorder is an http.ResponseWriter that also implements
+// http.Flusher, used to verify loggingResponseWriter forwards Flush calls.
+type flushableRecorder struct {
+	*httptest.ResponseRecorder
+	flushed int
+}
+
+func (fr *flushableRecorder) Flush() { fr.flushed++ }
+
+func TestLogger_FlushPassesThrough(t *testing.T) {
+	var buf bytes.Buffer
+	fr := &flushableRecorder{ResponseRecorder: httptest.NewRecorder()}
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+			f.Flush()
+		} else {
+			t.Error("loggingResponseWriter should implement http.Flusher")
+		}
+	})
+	Logger(&buf, false)(h).ServeHTTP(fr, httptest.NewRequest("GET", "/x", nil))
+	if fr.flushed != 2 {
+		t.Errorf("Flush() not propagated to inner: got %d calls want 2", fr.flushed)
+	}
+}
+
+func TestLogger_5xxStatusLogged(t *testing.T) {
+	var buf bytes.Buffer
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(503)
+		_, _ = w.Write([]byte("svc unavail"))
+	})
+	Logger(&buf, false)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		httptest.NewRequest("GET", "/x", nil),
+	)
+	if !strings.Contains(buf.String(), "503") {
+		t.Errorf("5xx not in log: %q", buf.String())
+	}
+}
