@@ -184,6 +184,26 @@ func TestLoadEnvFile_FileNotExist(t *testing.T) {
 	}
 }
 
+// TestLoadEnvFile_EscapedAtAllowed 锁定 `\@xxx` 转义语义：以反斜杠 + @
+// 开头的字符串是字面值（loader 同 convention），不应被 @include 检测拦截。
+func TestLoadEnvFile_EscapedAtAllowed(t *testing.T) {
+	env, active, err := LoadEnvFile("testdata/env/with-escaped-at.json5", "dev")
+	if err != nil {
+		t.Fatalf("\\@-escaped literal should load successfully; got %v", err)
+	}
+	if active != "dev" {
+		t.Errorf("active=%q want 'dev'", active)
+	}
+	// $default.literal carried into env (since chosen=dev wins on conflict,
+	// but dev doesn't have "literal" key — so it inherits from $default).
+	// Note: the loaded value is the literal string "\@not-an-include"
+	// (loader.go's isIncludeString convention). Phase 2 will decide whether
+	// to strip the leading backslash; for now we just verify it loaded.
+	if _, has := env["literal"]; !has {
+		t.Errorf("env should have 'literal' key from $default; got %v", env)
+	}
+}
+
 // TestLoadEnvFile_ActiveFieldPointsToMissingSegment 锁定 $active 指向不存在
 // segment 时的错误消息含 $active 上下文。
 func TestLoadEnvFile_ActiveFieldPointsToMissingSegment(t *testing.T) {

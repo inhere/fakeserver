@@ -1,0 +1,8 @@
+{
+  $default: {
+    literal: "\\@not-an-include",
+  },
+  dev: {
+    token: "x",
+  },
+}
