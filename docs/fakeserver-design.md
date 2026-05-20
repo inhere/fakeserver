@@ -15,6 +15,7 @@
 | 2026-05-19 | v0.3-phase3-applied | inhere | Phase 3 落地：internal/tpl（含 22+ 自有函数 + gofakeit 桥接 + 双渲染器）+ internal/mock（router/responder）+ serve 接入。单一响应模式 mock 真正生效；cases/proxy 留 Phase 4 |
 | 2026-05-19 | v0.3-phase4-applied | inhere | Phase 4 落地：internal/mock 增 matcher（expr）+ selector（四 strategy）+ cases.go；internal/proxy 整包（ReverseProxy + 全量字段）；config.Validate 增 when 语法预检；新增 config.Warn 警告通道（first-match 无兜底、proxy.target 私网 info）；cli 装配 proxy.Mount 与 Warn 输出 |
 | 2026-05-19 | v0.3-phase5-applied | inhere | Phase 5 落地：internal/middleware（recoverer/logger/cors/bodylimit/chain/holder）+ internal/config/watcher.go + admin /__fakeserver/routes + 启动 banner + serve --quiet/--no-cors/--no-watch flag。v0.1 MVP 完整闭环。 |
+| 2026-05-20 | v0.4-phase0.2.1-applied | inhere | v0.2 Phase 1：env 文件加载（design §8.1/§8.2/§8.3 部分）+ Route.SourceFile 填充修复 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1247,6 +1248,12 @@ if seed == 0 {
 7. **`cors: false` 配置生效**：`corsOptsFromCfg(cfg) → (CORSOpts, bool)` 返回 enabled 标志；assembleHandler 据此决定是否添加 CORS 中间件，避免 default 分支误把 false 当 reflect-mode。
 8. **v0.1 MVP 完整闭环 E2E 通过**：综合 config（mock + cases + proxy + bodyFile）启动 → 5 类请求验证 → 文件系统编辑 + 300ms 防抖 + holder swap → 新路由生效 → 旧路由仍工作。该测试覆盖 Phase 1-5 全部模块协作。
 9. **存量 bug `Route.SourceFile`**（v0.2 修复，bd lite-tools-gko）：loader 用 JSON round-trip 构造 Config，`json:"-"` 字段被吞掉，导致 `bodyFile` 相对路径在 CWD ≠ config 目录时退化。v0.1 用绝对路径或 CWD 对齐 workaround。
+
+### 已落地（v0.2 Phase 1 阶段确认）
+
+1. **`fakeserver.env.json5` 自动加载**：loader.Load 在主配置加载后查找同目录 env 文件，合并 `$default` + 选中段写入 `cfg.Env`；env 文件路径写入 `cfg.EnvSource` 供后续 watcher 用。envName="" 时优先级链 `$active` → 首个非 `$default` 段 → 空（CLI/env-var 留 Phase 2）。
+2. **`Route.SourceFile` 填充**：loader 在 expandIncludes 阶段为每条 route 标注来源文件路径，绕过 JSON round-trip 对 `json:"-"` 字段的剥离。修复了 v0.1 遗留的 bd lite-tools-gko（相对 bodyFile 路径解析在 CWD ≠ config 目录时失效）。
+3. **env 文件不支持 @include**：design §8.2 末尾约定的"env 文件不接 include"在 loader 层强制执行；遇 `@xxx` 字符串报错。`\@xxx` 字面值豁免。
 
 ### 待评审
 

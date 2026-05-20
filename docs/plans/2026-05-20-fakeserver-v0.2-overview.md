@@ -31,7 +31,7 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
-| **1** | SourceFile bug 修复 + envfile.go 基础加载（$default 合并 + $active + 默认查找） | `internal/config/envfile.go` + loader Route.SourceFile 填充 | — | v0.1 | ~400 行 | 待开始 |
+| **1** | SourceFile bug 修复 + envfile.go 基础加载（$default 合并 + $active + 默认查找） | `internal/config/envfile.go` + loader Route.SourceFile 填充 | — | v0.1 | ~400 行 | ✅ 已完成 (commit 29a1eb9..7c5a0f9) |
 | **2** | CLI 整合 + osenv 白名单完整化 + watcher 同步监听 env 文件 | `internal/cli/serve.go --env/--var` flag + `internal/tpl/funcs.go` osenv 收紧 + envfile 模板渲染 | — | Phase 1 | ~500 行 | 待开始 |
 | **3** | v0.2 收尾 E2E + 综合场景 + 文档回写 | `internal/cli/serve_e2e_test.go` 扩展 + docs 回写 | — | Phase 2 | ~200 行 | 待开始 |
 
@@ -86,6 +86,24 @@ design §14 路线图明确 v0.2 范围**仅含 env 相关功能**——项目�
 7. `go test ./...` 通过；`internal/config` 覆盖率维持 ≥ 80%
 
 **对 design 章节的映射**：§8.1 文件查找 / §8.2 `$default` 合并（不含值层级模板渲染）/ §8.3 优先级链中"`$active` + 首段"两条 / §3.2 Route 字段层面接入 SourceFile / v0.1 backlog `lite-tools-gko` 修复。
+
+**实际落地偏差**：
+
+- **SourceFile 修复选用方案 B**（loader 内部 `__source_file__` sentinel + zip）：方案 A（Route UnmarshalJSON hook）代码量相近但侵入 Route struct；方案 B 完全限制在 loader 内部，对 Route 类型零侵入。详见 Phase 1 Task 1 spike 报告。
+- **annotateRoutesWithSource 总是覆写 sentinel**：原计划"只在未设置时注入"的 guard 实际不必要（每条 route 仅在 loadFile 边界注解一次），且会让用户在 JSON5 写的 `__source_file__` 字段污染路径解析。修复后总是用 loader 的真实路径覆写——见 commit 7e8ca13。
+- **JSON5 解析后键序不保证**：`titanous/json5` 把对象解码成 Go `map[string]any`，"first non-$default segment" 在多段情况下非确定。`TestLoadEnvFile_MultiEnv_FirstSegmentByDefault` 容忍 dev/staging 任一作为 active。若 v0.2 后续阶段发现用户依赖键序，需切换到 LinkedHashMap 风格的 decoder。
+- **`$default` / `$active` 类型严格校验**：原 plan 用 `_, _ = .(type)` 静默忽略类型错；review 反馈后改为显式 present + type check，类型不对直接报错——见 commit 65e6d52。
+- **envfile.go 不渲染值层级模板**（Phase 1 边界）：env 文件中 `"token": "{{ osenv \"X\" }}"` 在 Phase 1 直接作为字符串保留，{{ }} 表达式不展开。Phase 2 加渲染步骤。
+- **`__source_file__` sentinel key 命名约定**：双下划线前后缀降低用户字段碰撞概率，但用户若真写了同名字段，loader 会无条件覆写（不是丢失数据，仍能写入路径，但用户自己的字段值被覆盖）。可接受。
+
+**Phase 1 测试覆盖**：~22 个新增用例（loader SourceFile 3 + envfile 16 + loader 集成 2 + bodyFile 回归 1）；`internal/config` 覆盖率 88.5%（运行 `go test -cover ./internal/config/...` 后填入）。
+
+**Phase 1 commit 流水**（8 个 commit）：
+- Task 2: `29a1eb9` (SourceFile 修复) + `7e8ca13` (sentinel 覆写安全修复)
+- Task 3: `4e1936c` (schema 字段 + envfile 骨架)
+- Task 4: `4c38538` (LoadEnvFile 核心) + `65e6d52` (类型严格校验)
+- Task 5: `abacf29` (@include 拒绝) + `105f29f` (\@xxx 转义正向测试)
+- Task 6: `7c5a0f9` (loader 集成) + `<docs commit SHA — 本次提交>`
 
 ---
 
