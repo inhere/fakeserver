@@ -26,6 +26,10 @@ type Config struct {
 	// Env, or "" if no env file was found. v0.2 Phase 2 uses this to
 	// extend watcher's SourcePaths so env edits trigger hot reload.
 	EnvSource string `json:"-"`
+
+	// EnvName is the active env segment chosen from EnvSource. It is runtime
+	// metadata for banners/diagnostics and is not serialized.
+	EnvName string `json:"-"`
 }
 
 // ServerOpts mirrors the "server" block in JSON5. Each field's default is

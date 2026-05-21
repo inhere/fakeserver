@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,6 +36,9 @@ func TestBanner_FullCfg(t *testing.T) {
 	if !strings.Contains(s, "fallback=echo") {
 		t.Errorf("missing fallback: %q", s)
 	}
+	if !strings.Contains(s, "ui:") || !strings.Contains(s, "http://127.0.0.1:5090/__fakeserver/ui/") {
+		t.Errorf("missing ui url: %q", s)
+	}
 }
 
 func TestBanner_NoCfg(t *testing.T) {
@@ -43,5 +47,34 @@ func TestBanner_NoCfg(t *testing.T) {
 	s := buf.String()
 	if !strings.Contains(s, "echo-only") {
 		t.Errorf("nil cfg should mention echo-only: %q", s)
+	}
+}
+
+func TestBanner_AdminDisabledShowsUIDisabled(t *testing.T) {
+	off := false
+	cfg := &config.Config{
+		Fallback: "echo",
+		Server:   config.ServerOpts{AdminEnabled: &off},
+	}
+	var buf bytes.Buffer
+	printBanner(&buf, cfg, "v0.1.0", "127.0.0.1:5090")
+	if s := buf.String(); !strings.Contains(s, "ui:          (disabled)") {
+		t.Fatalf("admin disabled banner should hide ui url: %q", s)
+	}
+}
+
+func TestBanner_ShowsEnvSourceAndActive(t *testing.T) {
+	on := true
+	cfg := &config.Config{
+		Fallback:    "echo",
+		Server:      config.ServerOpts{AdminEnabled: &on},
+		EnvSource:   filepath.Join("demo", "fakeserver.env.json5"),
+		EnvName:     "dev",
+		SourcePaths: []string{"fakeserver.json5", filepath.Join("demo", "fakeserver.env.json5")},
+	}
+	var buf bytes.Buffer
+	printBanner(&buf, cfg, "v0.1.0", "127.0.0.1:5090")
+	if s := buf.String(); !strings.Contains(s, "env:         dev (fakeserver.env.json5)") {
+		t.Fatalf("banner should include active env and env file: %q", s)
 	}
 }

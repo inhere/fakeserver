@@ -82,11 +82,12 @@ func Load(paths []string, envName string, overrides map[string]string) (*Config,
 	// config file. Phase 2: envName is now passed through from CLI/env-var.
 	if len(absSources) > 0 {
 		envPath := filepath.Join(filepath.Dir(absSources[0]), DefaultEnvFileName)
-		envMap, _, eerr := LoadEnvFile(envPath, envName)
+		envMap, activeEnv, eerr := LoadEnvFile(envPath, envName)
 		if eerr != nil {
 			return nil, fmt.Errorf("env file: %w", eerr)
 		}
 		cfg.Env = envMap
+		cfg.EnvName = activeEnv
 		// EnvSource is only set when the file existed (LoadEnvFile returns
 		// empty map for missing files; we want EnvSource="" in that case).
 		// Also append to SourcePaths so the watcher monitors the env file.

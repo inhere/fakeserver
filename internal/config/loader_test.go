@@ -384,6 +384,9 @@ func TestLoad_EnvFile_AutoLoaded(t *testing.T) {
 	if cfg.EnvSource != envPath {
 		t.Errorf("EnvSource=%q want %q", cfg.EnvSource, envPath)
 	}
+	if cfg.EnvName != "dev" {
+		t.Errorf("EnvName=%q want dev", cfg.EnvName)
+	}
 }
 
 func TestLoad_NoEnvFile_EmptyEnv(t *testing.T) {
