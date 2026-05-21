@@ -82,6 +82,17 @@ func TestServe_v04_WebUIAPIs(t *testing.T) {
 		}
 	}
 
+	resp, _ = http.Get(srv.URL + "/__fakeserver/ui")
+	uiNoSlashBody := readBodyString(t, resp)
+	if resp.StatusCode != 200 {
+		t.Errorf("ui without trailing slash status=%d", resp.StatusCode)
+	}
+	for _, want := range []string{`href="/__fakeserver/ui/style.css"`, `src="/__fakeserver/ui/main.js"`} {
+		if !strings.Contains(uiNoSlashBody, want) {
+			t.Errorf("ui without trailing slash missing %q", want)
+		}
+	}
+
 	resp, _ = http.Get(srv.URL + "/__fakeserver/ui/style.css")
 	cssBody := readBodyString(t, resp)
 	if resp.StatusCode != 200 {

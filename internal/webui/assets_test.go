@@ -36,6 +36,24 @@ func TestUIAssets_IndexServedAtRoot(t *testing.T) {
 	}
 }
 
+func TestUIAssets_IndexServedWithoutTrailingSlash(t *testing.T) {
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", recorder.New(10))
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	for _, want := range []string{`href="/__fakeserver/ui/style.css"`, `src="/__fakeserver/ui/main.js"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("index body missing absolute asset reference %q: %s", want, body)
+		}
+	}
+}
+
 func TestUIAssets_IndexServedByFilename(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
