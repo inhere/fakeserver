@@ -802,33 +802,3 @@ OpenAPI import 可以生成 routes，也可以生成 resources。先有 resource
 13. resources CRUD
 14. OpenAPI import
 15. SSE/WebSocket mock
-
-## 13. v0.5 拆分建议
-
-如果下一步开始做 v0.5，建议拆成 4 个 Phase：
-
-### Phase 1：`init --full`
-
-- 新增完整模板文件。
-- 支持 `--full` / `--force`。
-- 生成后 `check` 通过。
-
-### Phase 2：`check --strict`
-
-- 预编译 templates。
-- 检测常见模板访问错误。
-- 输出 source/route/field。
-
-### Phase 3：`doctor`
-
-- 环境诊断。
-- 输出修复建议。
-- 覆盖 config/env/include/bodyFile/port/proxy/admin/UI。
-
-### Phase 4：错误提示与 banner
-
-- 运行期错误结构增强。
-- banner 正确显示 env/UI。
-- 文档补前端开发工作流。
-
-每个 Phase 都应有 CLI 测试和 E2E 验证，不依赖后续 Phase 兜底。
