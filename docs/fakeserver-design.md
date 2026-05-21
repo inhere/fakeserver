@@ -1208,8 +1208,6 @@ if seed == 0 {
 ### 已落地（Phase 1 阶段确认）
 
 - **rux 真实 module path**：`github.com/gookit/rux/v2`（v2.0.0）。原 design §1.2 / §2.4 / §5.5 描述中提到的"rux v2"在 Go module 系统中需要显式 `/v2` 后缀；`github.com/gookit/rux`（不带 `/v2`）会拉到 v1.4.1，是另一个仓库分支。
-- **rux/v2 server 子包真实 API**：Phase 1 实际接入的是 `server.MountEchoRoutes(r *rux.Router)`——一行调用即可挂上完整 httpbin 风格端点集（含 `/anything`、`/headers`、`/ip`、`/status/{code}`、`/delay/{seconds}`、`/uuid`、`/redirect/{n}`、`/cookies/*`、`/basic-auth/*`、`/bytes/{n}`、`/download/{filename}`、`/upload`，以及一个 HTML 首页 `/`）。design §5.5 原占位描述（"EchoNotFoundHandler / RegisterEchoEndpoints"）已过期，以本条为准；详见 `internal/echo/probe.md`。
-- **CLI 编排实际位置**：CLI app 构造、子命令注册、serve 子命令的 run handler 全部位于 `internal/cli/`（`app.go` / `serve.go` / `serve_test.go`）；`cmd/fakeserver/main.go` 仅作极薄入口（5 行非空代码：package + import + var version + func main 调用 `cli.Run(version)`）。后续 Phase 子命令（init/check/routes/list/use）都在 `internal/cli` 内追加一个 .go 文件，不再回到 cmd/。
 - **rux/v2 行为偏离 design 文档原假设**：
   - `/ip` 端点返回字段名是 `origin`（不是 design 与 plan 假设的 `ip`）
   - `/status/{非法 code}` fallback 到 200（不是 400）
@@ -1219,20 +1217,10 @@ if seed == 0 {
 
 - **JSON5 解析库**：`github.com/titanous/json5 v1.0.0` 已接入；smoke 锁定其支持注释、无引号 key、单引号字符串、trailing comma 等扩展
 - **`@include` 实际语义**：被引入文件的根可以是对象、数组或单个 route；string include 在 routes 数组里**自动拍平**，在其他位置**整体替换**；仅支持 `.json`/`.json5` 后缀；glob 无匹配视为错误
-- **schema 中的 `Log` 字段用指针 `*bool`**：因为零值无法区分"未设置"与"显式 false"；Phase 5 接入 logger 中间件时按 `Log == nil` 视为默认开
 - **Validate 范围**：Phase 2 校验所有非依赖 expr/template 的规则（互斥、必填、重复、保留前缀、enum 校验、bodyFile 存在性、proxy.target scheme）。`when` 表达式语法与 `body` 模板语法的校验留给 Phase 4/3 与对应库一并接入
-- **Phase 2 边界**：`fakeserver serve -c <path>` 启动时**打印**路由摘要但**不注册** mock 路由 handler；配置中的 path 在 Phase 3 接入前仍走 echo `/*path` 兜底
 
 ### 已落地（Phase 3 阶段确认）
 
-- **tplfunc.StdFuncMap 实际清单**：~110 个函数，覆盖 string/math/list/encoding/path/hash/other 多个分类（含 randInt/uuid/md5/b64enc/fromJson/toJson/default/coalesce 等）。design §4.2 原描述"TODO + 少量基础"已过期；fakeserver 自有 22+ 函数仍全部实现，BaseFuncMap 中后注册覆盖
-- **gofakeit/v7 v7.15.0 实际 API**：
-  - `Seed(int64)` —— 不是 uint64
-  - `Generate(s string) (string, error)` —— 二元组返回，需 `out, _ := gofakeit.Generate(...)`
-  - `GetFuncs` 不存在 —— 通用 `fake "<name>"` 入口用 `Generate("{<name>}")` 实现
-  - `Sentence` / `Paragraph` 在 v7 为 variadic 参数，本 Phase 调用时不传参用默认行为
-- **rux v2 Context Params 形态**：`c.Params()` 是方法返回 `*core.Params`；内部 `data [16]Param + n uint8` 全私有；**无 AddParam**。公开遍历用 `Snapshot() []Param`、单 key 查询用 `Get(name)`、或 `c.Param(name)` 快捷方式
-- **rux v2 responseWriter 行为**：`WriteHeader(code)` 缓存状态码，到首次 `Write` 才真正发出。零 body 响应需 `Write(nil)` 触发 `ensureWriteHeader`——已在 `mock.Respond` 末尾处理
 - **easytpl 接入范围**：仅复用 `tplfunc.StdFuncMap()` 作为基础 FuncMap；**不**使用 easytpl.Renderer 的 layout/partial 能力。fakeserver 的 text/html 双渲染器直接基于 stdlib `text/template` + `html/template`
 - **Phase 3 边界**：mock router 跳过含 `cases` 或 `proxy` 字段的 route（Phase 4 处理）；未匹配请求仍走 echo `/*path` 兜底；模板里 `.env` Phase 3 为空 map（v0.2 才接 env 文件），`.osenv` 与 `osenv` 函数完整可用且受 osenvWhitelist 约束
 
@@ -1240,23 +1228,12 @@ if seed == 0 {
 
 1. **expr-lang/expr v1.17.8 实际 API**：`Compile(src, AsBool(), Env(...))` / `Run(prog, env any) (any, error)`。字段访问平铺命名空间（`request.query.x`，无前置点号）。运行期错误（字段缺失、类型不匹配）按情形返回 `(nil, error)` 或 `(nil, nil)`——本工程的 `Matcher.Evaluate` 统一降级为 `(false, err)`，调用方 warn 跳过单条 case，不影响整条路由。
 2. **ReverseProxy + Director 链路**：path 改写顺序锁定为 `stripPathPrefix` → `rewrite`（首匹配）→ host 切换；template 渲染**只在 `headers/responseHeaders` value 上**生效（design §9.2 明确）。其余字段 `target/rewrite/stripPathPrefix/timeout/...` 均为字面量。
-3. **超时实现双层**：`Transport.ResponseHeaderTimeout` + 请求级 `context.WithTimeout`。ErrorHandler 通过 `errors.Is(perr, context.DeadlineExceeded || context.Canceled)` 加字符串兜底区分 504 vs 502。
-4. **bodyLimit 在 rux handler 入口前置强制**：放弃 `http.MaxBytesReader`（其错误经 ReverseProxy 的 body 拷贝触发，路径不可控）。改为 `readUpTo(buf of size limit+1)` 读满探测，超限 → 413 + JSON 错误体，body 不打到上游。
-5. **`config.Warn(cfg) []string` 与 `Validate(cfg) []error` 并列**：前者只产生 stderr advisories、不影响 exit code；后者产生终止性错误。`first-match` 所有 case 都带 `when`（无兜底）触发 warn；`proxy.target` 私网/localhost 触发 info 级 warn（不阻止启动）。
-6. **proxy.headers 模板 ctx 缺 `body/bodyRaw/params`**：proxy 包独立的 `buildProxyRenderCtx(req)` 不读 req.Body（避免 drain），可用键为 method/path/host/headers/query/ip。需要 body 参与 header 模板的场景请改用 mock route 而非 proxy。
-7. **Phase 4 边界**：未引入 `fsnotify`；未引入中间件；admin 端点不变；热加载、CORS、recoverer、bodylimit 中间件全部留 Phase 5。`config.Warn` 已就位但只挂在 serve / check 启动期 stderr——运行期警告路径（如 matcher 运行期 err）走 `log.Printf` 写 stderr。
+3. **Phase 4 边界**：未引入 `fsnotify`；未引入中间件；admin 端点不变；热加载、CORS、recoverer、bodylimit 中间件全部留 Phase 5。`config.Warn` 已就位但只挂在 serve / check 启动期 stderr——运行期警告路径（如 matcher 运行期 err）走 `log.Printf` 写 stderr。
 
 ### 已落地（Phase 5 阶段确认）
 
-1. **fsnotify Windows rename 行为**：编辑器原子保存（写 tmp → rename）在 Windows 触发 5 事件序列（CREATE.tmp/WRITE.tmp/REMOVE/RENAME.tmp/CREATE）。300ms 防抖窗口充分聚合。
-2. **CORS OPTIONS 后置策略**：用 `bufferedWriter` 在 middleware 层拦截路由响应；路由返回 404 时改写为 204 + preflight headers；否则透传仅追加 CORS header。无需在路由层注册 OPTIONS catch-all。
-3. **Holder 原子 swap**：`atomic.Pointer[http.Handler]` 实现零拷贝热替换。在途请求继续走旧 handler 直至完成；新请求走新 handler。
-4. **watcher 目录订阅**：单文件 fsnotify Add 在 rename-in-place 后失效；改为订阅每条 SourcePath 的所在目录（去重），事件回调里用 wanted map 过滤回 path 集合。
-5. **admin.Mount 签名升级**：从 `Mount(r)` 到 `Mount(r, cfg)`，让 `/__fakeserver/routes` handler 闭包持有 cfg 引用。每次 watcher swap 调用一次 Mount（在 assembleHandler 内），/routes 总返回最新 cfg。
-6. **`parseByteSize → ParseByteSize` 导出**：Phase 4 proxy 包私有函数提升为 `proxy.ParseByteSize`，被 cli 包 `parseMaxBodySize` 复用。
-7. **`cors: false` 配置生效**：`corsOptsFromCfg(cfg) → (CORSOpts, bool)` 返回 enabled 标志；assembleHandler 据此决定是否添加 CORS 中间件，避免 default 分支误把 false 当 reflect-mode。
-8. **v0.1 MVP 完整闭环 E2E 通过**：综合 config（mock + cases + proxy + bodyFile）启动 → 5 类请求验证 → 文件系统编辑 + 300ms 防抖 + holder swap → 新路由生效 → 旧路由仍工作。该测试覆盖 Phase 1-5 全部模块协作。
-9. **存量 bug `Route.SourceFile`**（v0.2 修复，bd lite-tools-gko）：loader 用 JSON round-trip 构造 Config，`json:"-"` 字段被吞掉，导致 `bodyFile` 相对路径在 CWD ≠ config 目录时退化。v0.1 用绝对路径或 CWD 对齐 workaround。
+1. **v0.1 MVP 完整闭环 E2E 通过**：综合 config（mock + cases + proxy + bodyFile）启动 → 5 类请求验证 → 文件系统编辑 + 300ms 防抖 + holder swap → 新路由生效 → 旧路由仍工作。该测试覆盖 Phase 1-5 全部模块协作。
+2. **存量 bug `Route.SourceFile`**（v0.2 修复，bd lite-tools-gko）：loader 用 JSON round-trip 构造 Config，`json:"-"` 字段被吞掉，导致 `bodyFile` 相对路径在 CWD ≠ config 目录时退化。v0.1 用绝对路径或 CWD 对齐 workaround。
 
 ### 已落地（v0.2 Phase 1 阶段确认）
 
