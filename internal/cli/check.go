@@ -13,21 +13,24 @@ import (
 )
 
 type checkOptions struct {
-	paths []string
-	out   io.Writer
+	paths  []string
+	strict bool
+	out    io.Writer
 }
 
 func newCheckCmd() *gcli.Command {
 	var configFlag string
+	var strict bool
 	return &gcli.Command{
 		Name: "check",
 		Desc: "Load and validate a fakeserver config (does not start the server)",
 		Config: func(cmd *gcli.Command) {
 			cmd.StrOpt2(&configFlag, "config,c", "Comma-separated config paths")
+			cmd.BoolOpt2(&strict, "strict", "Also pre-parse route templates and report common runtime risks")
 		},
 		Func: func(cmd *gcli.Command, _ []string) error {
 			paths := splitConfigPaths(configFlag)
-			return runCheck(checkOptions{paths: paths, out: os.Stdout})
+			return runCheck(checkOptions{paths: paths, strict: strict, out: os.Stdout})
 		},
 	}
 }
@@ -41,11 +44,18 @@ func runCheck(opts checkOptions) error {
 		return errorx.Failf(1, "check: %s", err.Error())
 	}
 	errs := config.Validate(cfg)
+	if opts.strict {
+		errs = append(errs, config.StrictValidate(cfg)...)
+	}
 	if len(errs) > 0 {
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("check: %d problem(s):\n", len(errs)))
 		for i, e := range errs {
-			sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, e.Error()))
+			prefix := ""
+			if opts.strict {
+				prefix = "strict: "
+			}
+			sb.WriteString(fmt.Sprintf("  %d. %s%s\n", i+1, prefix, e.Error()))
 		}
 		return errorx.Failf(1, "%s", sb.String())
 	}
@@ -53,6 +63,9 @@ func runCheck(opts checkOptions) error {
 		fmt.Fprintln(os.Stderr, "warn:", w)
 	}
 	fmt.Fprintf(opts.out, "OK: %d routes loaded\n", len(cfg.Routes))
+	if opts.strict {
+		fmt.Fprintln(opts.out, "OK: strict template checks passed")
+	}
 	return nil
 }
 

@@ -82,3 +82,43 @@ func TestCheck_FirstMatchNoFallback_PrintsWarnButExitOk(t *testing.T) {
 		t.Errorf("stderr missing warn: %q", string(stderrOut))
 	}
 }
+
+func TestRunCheck_StrictReportsTemplateProblems(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.json5")
+	body := `{
+		routes: [{
+			method: "GET",
+			path: "/bad",
+			body: "{{ .unclosed",
+		}],
+	}`
+	if err := os.WriteFile(cfgPath, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	err := runCheck(checkOptions{paths: []string{cfgPath}, strict: true, out: &buf})
+	if err == nil {
+		t.Fatal("expected strict check error")
+	}
+	if !strings.Contains(err.Error(), "strict") || !strings.Contains(err.Error(), "body") {
+		t.Fatalf("strict error missing context: %v", err)
+	}
+}
+
+func TestRunCheck_StrictValidConfigPrintsStrictOK(t *testing.T) {
+	tmp := t.TempDir()
+	if err := runInit(initOptions{cwd: tmp, full: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	err := runCheck(checkOptions{paths: []string{filepath.Join(tmp, "fakeserver.json5")}, strict: true, out: &buf})
+	if err != nil {
+		t.Fatalf("strict check should pass: %v", err)
+	}
+	if !strings.Contains(buf.String(), "strict template checks passed") {
+		t.Fatalf("strict success output missing, got %q", buf.String())
+	}
+}
