@@ -55,8 +55,11 @@
     $("routes-body").innerHTML = routes.length ? routes.map((r) => row([
       `<span class="method">${escapeHTML(r.method)}</span>`,
       escapeHTML(r.path),
-      escapeHTML(r.mode),
+      `${escapeHTML(r.mode)} <button type="button" data-test-route-index="${escapeHTML(r.index)}" data-test-route-method="${escapeHTML(r.method)}">Test</button>`,
     ])).join("") : '<tr><td colspan="3">No routes loaded.</td></tr>';
+    for (const btn of $("routes-body").querySelectorAll("[data-test-route-index]")) {
+      btn.addEventListener("click", () => openRouteTester(Number(btn.dataset.testRouteIndex), btn.dataset.testRouteMethod));
+    }
   }
 
   function statusClass(status) {
@@ -231,6 +234,64 @@
     }
   }
 
+  function openRouteTester(index, method) {
+    const route = state.routes.find((r) => Number(r.index) === index && r.method === method) || state.routes.find((r) => Number(r.index) === index);
+    if (!route) return;
+    $("route-tester").hidden = false;
+    const methodSelect = $("tester-method");
+    const methods = route.method === "*" ? ["GET", "POST", "PUT", "PATCH", "DELETE"] : [route.method];
+    methodSelect.innerHTML = methods.map((m) => `<option value="${escapeHTML(m)}">${escapeHTML(m)}</option>`).join("");
+    $("tester-path").value = route.path || "/";
+    $("tester-query").value = "";
+    $("tester-headers").value = ["POST", "PUT", "PATCH"].includes(methodSelect.value) ? "Content-Type: application/json" : "";
+    $("tester-body").value = ["POST", "PUT", "PATCH"].includes(methodSelect.value) ? "{}" : "";
+    $("tester-response").textContent = `Ready: ${methodSelect.value} ${route.path}`;
+    location.hash = "routes";
+  }
+
+  function parseHeaders(text) {
+    const headers = {};
+    for (const line of String(text || "").split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const idx = trimmed.indexOf(":");
+      if (idx <= 0) continue;
+      headers[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim();
+    }
+    return headers;
+  }
+
+  function buildTesterPath() {
+    let path = $("tester-path").value || "/";
+    const query = new URLSearchParams();
+    for (const line of $("tester-query").value.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const idx = trimmed.indexOf("=");
+      if (idx < 0) {
+        query.append(trimmed, "");
+      } else {
+        query.append(trimmed.slice(0, idx), trimmed.slice(idx + 1));
+      }
+    }
+    const qs = query.toString();
+    if (qs) path += (path.includes("?") ? "&" : "?") + qs;
+    return path;
+  }
+
+  async function sendTesterRequest() {
+    const method = $("tester-method").value || "GET";
+    const init = { method, headers: parseHeaders($("tester-headers").value) };
+    if (!["GET", "HEAD"].includes(method) && $("tester-body").value) {
+      init.body = $("tester-body").value;
+    }
+    const started = performance.now();
+    const resp = await fetch(buildTesterPath(), init);
+    const result = await readFetchResponse(resp);
+    result.durationMs = Math.round((performance.now() - started) * 10) / 10;
+    $("tester-response").textContent = JSON.stringify(result, null, 2);
+  }
+
   async function copySelectedCurl() {
     if (!state.selectedEntry) return;
     const text = buildCurl(state.selectedEntry);
@@ -316,6 +377,11 @@
   });
   $("copy-curl-button").addEventListener("click", copySelectedCurl);
   $("replay-button").addEventListener("click", replaySelectedEntry);
+  $("tester-send").addEventListener("click", () => {
+    sendTesterRequest().catch((err) => {
+      $("tester-response").textContent = String(err.message || err);
+    });
+  });
   onHashChange();
   refreshAll();
   connectEvents();

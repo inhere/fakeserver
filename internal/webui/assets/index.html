@@ -80,6 +80,15 @@
 
       <section id="route-tester" class="tester" hidden>
         <h3>Route tester</h3>
+        <div class="tester-grid">
+          <label>Method <select id="tester-method"></select></label>
+          <label>Path <input id="tester-path" type="text"></label>
+          <label>Query <textarea id="tester-query" rows="3" placeholder="page=1&#10;limit=20"></textarea></label>
+          <label>Headers <textarea id="tester-headers" rows="3" placeholder="Content-Type: application/json"></textarea></label>
+          <label>Body <textarea id="tester-body" rows="6" placeholder="{ }"></textarea></label>
+        </div>
+        <button id="tester-send" type="button">Send</button>
+        <pre id="tester-response" class="detail-code">No request sent.</pre>
       </section>
 
       <section class="view" id="view-config" aria-labelledby="view-title" hidden>

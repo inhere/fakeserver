@@ -154,6 +154,29 @@ func TestUIAssets_ReplayContracts(t *testing.T) {
 	}
 }
 
+func TestUIAssets_RouteTesterContracts(t *testing.T) {
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", recorder.New(10))
+
+	index := httptest.NewRecorder()
+	router.ServeHTTP(index, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/", nil))
+	for _, want := range []string{
+		"route-tester",
+		"tester-method",
+		"tester-path",
+		"tester-query",
+		"tester-headers",
+		"tester-body",
+		"tester-send",
+		"tester-response",
+	} {
+		if !strings.Contains(index.Body.String(), want) {
+			t.Fatalf("index missing %q", want)
+		}
+	}
+}
+
 func TestUIAssets_AdminDisabledNoEndpoints(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(false)}}
