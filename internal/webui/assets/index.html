@@ -64,6 +64,22 @@
             <tbody id="history-body"><tr><td colspan="6">Waiting for requests...</td></tr></tbody>
           </table>
         </div>
+        <aside id="history-detail-drawer" class="drawer" hidden>
+          <div class="drawer-header">
+            <h2 id="history-detail-title">Request</h2>
+            <button id="history-detail-close" type="button">Close</button>
+          </div>
+          <div id="history-detail-body" class="drawer-body"></div>
+          <div class="drawer-actions">
+            <button id="copy-curl-button" type="button">Copy curl</button>
+            <button id="replay-button" type="button">Replay</button>
+          </div>
+          <pre id="replay-result" class="detail-code" hidden></pre>
+        </aside>
+      </section>
+
+      <section id="route-tester" class="tester" hidden>
+        <h3>Route tester</h3>
       </section>
 
       <section class="view" id="view-config" aria-labelledby="view-title" hidden>

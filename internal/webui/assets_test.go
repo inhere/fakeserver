@@ -111,6 +111,34 @@ func TestUIAssets_CSSAndJSContracts(t *testing.T) {
 	}
 }
 
+func TestUIAssets_DebugConsoleContracts(t *testing.T) {
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", recorder.New(10))
+
+	index := httptest.NewRecorder()
+	router.ServeHTTP(index, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/", nil))
+	for _, want := range []string{
+		"history-detail-drawer",
+		"history-detail-body",
+		"copy-curl-button",
+		"replay-button",
+		"route-tester",
+	} {
+		if !strings.Contains(index.Body.String(), want) {
+			t.Fatalf("index missing %q", want)
+		}
+	}
+
+	js := httptest.NewRecorder()
+	router.ServeHTTP(js, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/main.js", nil))
+	for _, want := range []string{"function buildCurl", "openHistoryDetail", "copy-curl-button"} {
+		if !strings.Contains(js.Body.String(), want) {
+			t.Fatalf("main.js missing %q", want)
+		}
+	}
+}
+
 func TestUIAssets_AdminDisabledNoEndpoints(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(false)}}

@@ -1,6 +1,6 @@
 (function () {
   const views = ["projects", "routes", "history", "config"];
-  const state = { history: [], routes: [] };
+  const state = { history: [], routes: [], selectedEntry: null };
 
   const $ = (id) => document.getElementById(id);
 
@@ -22,6 +22,10 @@
 
   function row(cells) {
     return `<tr>${cells.map((c) => `<td>${c}</td>`).join("")}</tr>`;
+  }
+
+  function historyRow(entry, cells) {
+    return `<tr data-history-id="${escapeHTML(entry.id)}">${cells.map((c) => `<td>${c}</td>`).join("")}</tr>`;
   }
 
   async function getJSON(path) {
@@ -66,7 +70,7 @@
     $("history-body").innerHTML = state.history.length ? state.history.slice(-200).reverse().map((e) => {
       const ts = e.ts ? new Date(e.ts).toLocaleTimeString() : "-";
       const status = `<span class="${statusClass(e.status)}">${escapeHTML(e.status || "-")}</span>`;
-      return row([
+      return historyRow(e, [
         escapeHTML(ts),
         `<span class="method">${escapeHTML(e.method || "-")}</span>`,
         escapeHTML(e.path || "-"),
@@ -75,6 +79,110 @@
         escapeHTML(e.clientIp || "-"),
       ]);
     }).join("") : '<tr><td colspan="6">Waiting for requests...</td></tr>';
+    for (const tr of $("history-body").querySelectorAll("[data-history-id]")) {
+      tr.addEventListener("click", () => openHistoryDetail(tr.dataset.historyId));
+    }
+  }
+
+  function formatBody(capture) {
+    if (!capture) return "-";
+    if (capture.binary) return "Binary body omitted";
+    if (!capture.body) return (capture.omitted || []).join(", ") || "-";
+    const text = String(capture.body);
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2);
+    } catch (_) {
+      return text;
+    }
+  }
+
+  function captureBlock(title, capture) {
+    const headers = capture?.headers || {};
+    const headerText = Object.keys(headers).length ? JSON.stringify(headers, null, 2) : "-";
+    const suffix = capture?.truncated ? `\n\n(truncated at ${capture.bodySize || 0} bytes)` : "";
+    return `
+      <section class="detail-section">
+        <h3>${escapeHTML(title)}</h3>
+        <div class="detail-grid">
+          <div>Content-Type</div><div>${escapeHTML(capture?.contentType || "-")}</div>
+          <div>Body size</div><div>${escapeHTML(capture?.bodySize ?? "-")}</div>
+        </div>
+        <pre class="detail-code">${escapeHTML(headerText)}</pre>
+        <pre class="detail-code">${escapeHTML(formatBody(capture) + suffix)}</pre>
+      </section>`;
+  }
+
+  function renderHistoryDetail(entry) {
+    $("history-detail-title").textContent = `${entry.method || "-"} ${entry.path || "-"}`;
+    $("history-detail-body").innerHTML = `
+      <section class="detail-section">
+        <h3>Summary</h3>
+        <div class="detail-grid">
+          <div>Status</div><div>${escapeHTML(entry.status || "-")}</div>
+          <div>Duration</div><div>${escapeHTML(entry.durationMs ? `${entry.durationMs.toFixed(1)}ms` : "-")}</div>
+          <div>Client</div><div>${escapeHTML(entry.clientIp || "-")}</div>
+        </div>
+      </section>
+      <section class="detail-section">
+        <h3>Matched route</h3>
+        <div class="detail-grid">
+          <div>Mode</div><div>${escapeHTML(entry.routeMode || "-")}</div>
+          <div>Route index</div><div>${escapeHTML(entry.routeIndex ?? "-")}</div>
+          <div>Case index</div><div>${escapeHTML(entry.caseIndex ?? "-")}</div>
+          <div>Source</div><div>${escapeHTML(entry.routeSource || "-")}</div>
+          <div>Proxy target</div><div>${escapeHTML(entry.proxyTarget || "-")}</div>
+        </div>
+      </section>
+      ${captureBlock("Request", entry.request)}
+      ${captureBlock("Response", entry.response)}
+    `;
+  }
+
+  async function openHistoryDetail(id) {
+    const entry = await getJSON(`/__fakeserver/api/history/${id}`);
+    state.selectedEntry = entry;
+    $("history-detail-drawer").hidden = false;
+    $("replay-result").hidden = true;
+    renderHistoryDetail(entry);
+  }
+
+  function shellQuote(value) {
+    return `'${String(value).replace(/'/g, `'\\''`)}'`;
+  }
+
+  function buildCurl(entry) {
+    const parts = ["curl"];
+    const method = entry.method || "GET";
+    if (!["GET", "HEAD"].includes(method)) {
+      parts.push("-X", method);
+    }
+    const headers = entry.request?.headers || {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (value === "***") continue;
+      parts.push("-H", shellQuote(`${key}: ${value}`));
+    }
+    if (entry.request?.body && !["GET", "HEAD"].includes(method)) {
+      parts.push("--data-raw", shellQuote(entry.request.body));
+    }
+    parts.push(shellQuote(`${location.origin}${entry.path || "/"}`));
+    return parts.join(" ");
+  }
+
+  async function copySelectedCurl() {
+    if (!state.selectedEntry) return;
+    const text = buildCurl(state.selectedEntry);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {
+      const area = document.createElement("textarea");
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    $("copy-curl-button").textContent = "Copied";
+    setTimeout(() => { $("copy-curl-button").textContent = "Copy curl"; }, 1200);
   }
 
   function renderConfig(cfg) {
@@ -140,6 +248,10 @@
   }
 
   window.addEventListener("hashchange", onHashChange);
+  $("history-detail-close").addEventListener("click", () => {
+    $("history-detail-drawer").hidden = true;
+  });
+  $("copy-curl-button").addEventListener("click", copySelectedCurl);
   onHashChange();
   refreshAll();
   connectEvents();

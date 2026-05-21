@@ -186,6 +186,14 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 
+tbody tr[data-history-id] {
+  cursor: pointer;
+}
+
+tbody tr[data-history-id]:hover {
+  background: #f1f7f4;
+}
+
 .method {
   color: var(--accent);
   font-weight: 700;
@@ -211,6 +219,95 @@ tbody tr:last-child td {
   line-height: 1.55;
 }
 
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  width: min(560px, 100vw);
+  height: 100vh;
+  color: var(--ink);
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 28px rgba(20, 30, 25, 0.18);
+}
+
+.drawer[hidden] {
+  display: none;
+}
+
+.drawer-header,
+.drawer-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.drawer-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.drawer button,
+.tester button {
+  min-height: 34px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: #edf4ef;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.drawer-body {
+  min-width: 0;
+  padding: 14px;
+  overflow: auto;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section h3 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 6px 10px;
+  font-size: 13px;
+}
+
+.detail-code {
+  max-width: 100%;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  color: #dce7df;
+  background: #17211d;
+  border-radius: 6px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.tester {
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 @media (max-width: 820px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -223,5 +320,9 @@ tbody tr:last-child td {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .drawer {
+    width: 100vw;
   }
 }
