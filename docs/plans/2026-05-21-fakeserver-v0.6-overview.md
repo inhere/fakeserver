@@ -895,9 +895,9 @@ git commit -m "feat(webui): add history detail drawer"
 
 在 assets test 中断言 JS 包含：
 
-- [ ] `function replayEntry`
-- [ ] `replay-result`
-- [ ] `forbiddenHeaders`
+- [x] `function replayEntry`
+- [x] `replay-result`
+- [x] `forbiddenHeaders`
 
 Run:
 
@@ -1278,7 +1278,7 @@ git status
 - [x] History 行可打开详情抽屉。
 - [x] History 详情展示 request/response headers/body 与 route metadata。
 - [x] Copy as curl 可用，默认脱敏敏感 header。
-- [ ] Replay request 可用，并说明浏览器 forbidden header/body 未捕获限制。
+- [x] Replay request 可用，并说明浏览器 forbidden header/body 未捕获限制。
 - [ ] Routes 页面 route tester 可发送 GET/POST 请求。
 - [x] `init --full` 示例启用 capture。
 - [ ] `docs/usage/frontend-workflow.md` 更新 v0.6 用法。
