@@ -145,3 +145,59 @@ func TestServe_v04_AdminDisabled_NoUIEndpoints(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+func TestRouteReloadDiff_DetectsAddedRemovedChanged(t *testing.T) {
+	oldCfg := &config.Config{Routes: []config.Route{
+		{Method: []string{"GET"}, Path: "/old", Body: "x"},
+		{Method: []string{"POST"}, Path: "/changed", Status: 200, Body: "a"},
+	}}
+	newCfg := &config.Config{Routes: []config.Route{
+		{Method: []string{"GET"}, Path: "/new", Body: "x"},
+		{Method: []string{"POST"}, Path: "/changed", Status: 201, Body: "a"},
+	}}
+
+	diff := diffRoutes(oldCfg, newCfg)
+	assertStringSet(t, diff.Added, []string{"GET /new"})
+	assertStringSet(t, diff.Removed, []string{"GET /old"})
+	assertStringSet(t, diff.Changed, []string{"POST /changed"})
+}
+
+func TestEmitRouteReload_PublishesReloadEvent(t *testing.T) {
+	ring := recorder.New(10)
+	events, cancel := ring.Subscribe()
+	defer cancel()
+
+	oldCfg := &config.Config{Routes: []config.Route{{Method: []string{"GET"}, Path: "/old", Body: "x"}}}
+	newCfg := &config.Config{Routes: []config.Route{{Method: []string{"GET"}, Path: "/new", Body: "x"}}}
+	emitRouteReload(ring, oldCfg, newCfg)
+
+	select {
+	case ev := <-events:
+		if ev.Kind != recorder.EventReload {
+			t.Fatalf("event kind=%q, want reload", ev.Kind)
+		}
+		if ev.Reload == nil {
+			t.Fatal("reload payload is nil")
+		}
+		assertStringSet(t, ev.Reload.Added, []string{"GET /new"})
+		assertStringSet(t, ev.Reload.Removed, []string{"GET /old"})
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for reload event")
+	}
+}
+
+func assertStringSet(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	seen := map[string]bool{}
+	for _, v := range got {
+		seen[v] = true
+	}
+	for _, v := range want {
+		if !seen[v] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}

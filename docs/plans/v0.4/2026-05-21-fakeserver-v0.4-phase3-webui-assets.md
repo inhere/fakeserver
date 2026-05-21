@@ -127,7 +127,7 @@ git commit -m "feat(webui): add read-only dashboard assets"
 - Modify: `internal/cli/serve.go`
 - Modify: `internal/cli/serve_v04_e2e_test.go`
 
-- [ ] **Step 1: Write failing reload event test**
+- [x] **Step 1: Write failing reload event test**
 
 Add an integration test around a helper function, not a real filesystem watcher:
 - build old cfg with `GET /old`
@@ -148,7 +148,7 @@ go test ./internal/cli -run 'TestServe_v04_Reload|TestRouteReloadDiff' -count=1
 
 Expected: fail because diff helper / emit wiring does not exist.
 
-- [ ] **Step 2: Implement route diff helper and watcher emit**
+- [x] **Step 2: Implement route diff helper and watcher emit**
 
 Add unexported helpers in `serve.go`:
 - `routeSignature(config.Route) string`
@@ -162,7 +162,7 @@ In watcher callback:
 
 Changed detection can compare mode + method/path + proxy target + cases count + status/body presence. Keep it deterministic and cheap; exact semantic deep diff is not required for v0.4 UI.
 
-- [ ] **Step 3: Run tests and commit**
+- [x] **Step 3: Run tests and commit**
 
 ```bash
 go test ./internal/cli -run 'TestServe_v04_Reload|TestRouteReloadDiff' -count=1

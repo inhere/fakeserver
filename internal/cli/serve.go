@@ -308,6 +308,7 @@ func runServe(opts serveOptions) error {
 
 	holder := middleware.NewHolder()
 	holder.Swap(assembleHandler(cfg, renderer, opts, ring))
+	currentCfg := cfg
 
 	// Start hot-reload watcher if config came from a file and --no-watch isn't set
 	var watcher *config.Watcher
@@ -331,6 +332,8 @@ func runServe(opts serveOptions) error {
 			}
 			newRenderer := tpl.NewRenderer(newCfg.Globals, newCfg.Server.OSEnvWhitelist, newCfg.Server.FakerSeed)
 			holder.Swap(assembleHandler(newCfg, newRenderer, opts, ring))
+			emitRouteReload(ring, currentCfg, newCfg)
+			currentCfg = newCfg
 			fmt.Fprintln(os.Stderr, "info: config reloaded; router swapped")
 		})
 		if err != nil {
@@ -366,6 +369,62 @@ func runServe(opts serveOptions) error {
 	}
 	fmt.Println("bye.")
 	return nil
+}
+
+func emitRouteReload(ring *recorder.Ring, oldCfg, newCfg *config.Config) {
+	if ring == nil {
+		return
+	}
+	ring.EmitReload(diffRoutes(oldCfg, newCfg))
+}
+
+func diffRoutes(oldCfg, newCfg *config.Config) recorder.ReloadDiff {
+	oldRoutes := routeDetails(oldCfg)
+	newRoutes := routeDetails(newCfg)
+	diff := recorder.ReloadDiff{}
+	for sig, detail := range newRoutes {
+		oldDetail, ok := oldRoutes[sig]
+		if !ok {
+			diff.Added = append(diff.Added, sig)
+			continue
+		}
+		if oldDetail != detail {
+			diff.Changed = append(diff.Changed, sig)
+		}
+	}
+	for sig := range oldRoutes {
+		if _, ok := newRoutes[sig]; !ok {
+			diff.Removed = append(diff.Removed, sig)
+		}
+	}
+	return diff
+}
+
+func routeDetails(cfg *config.Config) map[string]string {
+	out := map[string]string{}
+	if cfg == nil {
+		return out
+	}
+	for _, route := range cfg.Routes {
+		for _, method := range route.Method {
+			sig := strings.ToUpper(method) + " " + route.Path
+			out[sig] = routeDetail(route)
+		}
+	}
+	return out
+}
+
+func routeDetail(route config.Route) string {
+	mode := "mock"
+	proxyTarget := ""
+	if route.Proxy != nil {
+		mode = "proxy"
+		proxyTarget = route.Proxy.Target
+	} else if len(route.Cases) > 0 {
+		mode = "cases"
+	}
+	return fmt.Sprintf("%s|status=%d|cases=%d|strategy=%s|proxy=%s|body=%t|bodyFile=%s",
+		mode, route.Status, len(route.Cases), route.Strategy, proxyTarget, route.Body != nil, route.BodyFile)
 }
 
 // version returns the build-injected version string. Currently a stub
