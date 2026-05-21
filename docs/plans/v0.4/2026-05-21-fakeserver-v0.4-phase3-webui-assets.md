@@ -81,7 +81,7 @@ git commit -m "feat(webui): embed UI asset handler"
 - Create: `internal/webui/assets/main.js`
 - Modify: `internal/webui/assets_test.go`
 
-- [ ] **Step 1: Write asset contract tests**
+- [x] **Step 1: Write asset contract tests**
 
 Add assertions:
 - HTML includes links for `#projects`, `#routes`, `#history`, `#config`
@@ -97,7 +97,7 @@ go test ./internal/webui -run TestUIAssets -count=1
 
 Expected: fail until CSS/JS exist and HTML links are present.
 
-- [ ] **Step 2: Implement UI assets**
+- [x] **Step 2: Implement UI assets**
 
 UI behavior:
 - Projects view: fetch `/__fakeserver/api/projects`
@@ -111,7 +111,7 @@ Design constraints:
 - dense operational UI, no marketing hero
 - stable table dimensions and responsive single-column layout on small screens
 
-- [ ] **Step 3: Run tests and commit**
+- [x] **Step 3: Run tests and commit**
 
 ```bash
 go test ./internal/webui -run TestUIAssets -count=1

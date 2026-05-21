@@ -4,10 +4,73 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>fakeserver</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <main>
-    <h1>fakeserver</h1>
-  </main>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="mark">fs</span>
+        <div>
+          <h1>fakeserver</h1>
+          <p id="server-status">connecting</p>
+        </div>
+      </div>
+      <nav class="nav-tabs" aria-label="Primary">
+        <a href="#projects" data-view="projects">Projects</a>
+        <a href="#routes" data-view="routes">Routes</a>
+        <a href="#history" data-view="history">History</a>
+        <a href="#config" data-view="config">Config</a>
+      </nav>
+      <div class="side-meta">
+        <span id="route-count">0 routes</span>
+        <span id="history-count">0 events</span>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Live Admin Console</p>
+          <h2 id="view-title">History</h2>
+        </div>
+        <div class="connection" id="connection-state">offline</div>
+      </header>
+
+      <section class="reload-banner" id="reload-banner" hidden></section>
+
+      <section class="view" id="view-projects" aria-labelledby="view-title">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Status</th><th>Env</th><th>Port</th><th>Last Run</th></tr></thead>
+            <tbody id="projects-body"><tr><td colspan="5">Loading projects...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-routes" aria-labelledby="view-title" hidden>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Method</th><th>Path</th><th>Mode</th></tr></thead>
+            <tbody id="routes-body"><tr><td colspan="3">Loading routes...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-history" aria-labelledby="view-title" hidden>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th><th>Client</th></tr></thead>
+            <tbody id="history-body"><tr><td colspan="6">Waiting for requests...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-config" aria-labelledby="view-title" hidden>
+        <pre class="config-code" id="config-body">Loading config...</pre>
+      </section>
+    </main>
+  </div>
+  <script src="./main.js" defer></script>
 </body>
 </html>
