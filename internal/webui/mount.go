@@ -23,4 +23,7 @@ func Mount(r *rux.Router, cfg *config.Config, regPath string, ring *recorder.Rin
 	r.GET("/__fakeserver/api/config", apiConfigHandler(cfg))
 	r.GET("/__fakeserver/api/history", apiHistoryHandler(ring))
 	r.GET("/__fakeserver/events", sseEventsHandler(ring, defaultHeartbeat))
+	assets := uiAssetsHandler()
+	r.GET("/__fakeserver/ui/", assets)
+	r.GET("/__fakeserver/ui/*path", assets)
 }
