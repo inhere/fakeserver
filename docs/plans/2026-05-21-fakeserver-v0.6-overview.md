@@ -552,13 +552,13 @@ git commit -m "feat(middleware): capture request and response details"
 
 ### 8.1 Step 1: 写 failing tests
 
-- [ ] `TestRespond_SetsRecorderTrace`
+- [x] `TestRespond_SetsRecorderTrace`
   - 请求单响应 mock route。
   - handler 返回后从 trace 断言 `RouteMode=mock`、`RouteSource`、`RouteIndex`。
-- [ ] `TestRespondCases_SetsCaseTrace`
+- [x] `TestRespondCases_SetsCaseTrace`
   - 命中 case index 1。
   - trace 中 `RouteMode=cases`、`CaseIndex=1`。
-- [ ] `TestProxy_SetsRecorderTrace`
+- [x] `TestProxy_SetsRecorderTrace`
   - 代理请求。
   - trace 中 `RouteMode=proxy`、`ProxyTarget`。
 
@@ -1266,9 +1266,9 @@ git status
 - [x] recorder entry 有稳定递增 ID。
 - [x] `Ring.Get(id)` 可查询未覆盖 history entry。
 - [x] logger 能从 request context 读取 route/case/proxy 命中信息。
-- [ ] mock 单响应 route 写入 `routeMode=mock`、route index、source。
-- [ ] cases route 写入 `routeMode=cases`、route index、case index、source。
-- [ ] proxy route 写入 `routeMode=proxy`、route index、source、proxy target。
+- [x] mock 单响应 route 写入 `routeMode=mock`、route index、source。
+- [x] cases route 写入 `routeMode=cases`、route index、case index、source。
+- [x] proxy route 写入 `routeMode=proxy`、route index、source、proxy target。
 - [x] `server.capture` schema/defaults/validate 完成。
 - [x] capture enabled 时 request/response 文本 body 有限捕获。
 - [x] capture 对敏感 headers 和 JSON body key 脱敏。
