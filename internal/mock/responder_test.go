@@ -14,6 +14,7 @@ import (
 	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/config"
+	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
@@ -31,9 +32,44 @@ func newRespondServer(t *testing.T, method, registerPath string, route *config.R
 	t.Helper()
 	r := rux.New()
 	r.Add(registerPath, func(c *rux.Context) {
-		Respond(c, route, renderer, nil)
+		Respond(c, route, 0, renderer, nil)
 	}, method)
 	return httptest.NewServer(r)
+}
+
+func TestRespond_SetsRecorderTrace(t *testing.T) {
+	rdr := tpl.NewRenderer(nil, nil, 0)
+	route := &config.Route{
+		Method:     []string{"GET"},
+		Path:       "/trace",
+		SourceFile: "routes/trace.json5",
+		Body:       "ok",
+	}
+	var trace *recorder.RequestTrace
+	r := rux.New()
+	r.GET("/trace", func(c *rux.Context) {
+		ctx, tr := recorder.WithRequestTrace(c.Req.Context())
+		trace = tr
+		c.Req = c.Req.WithContext(ctx)
+		Respond(c, route, 4, rdr, nil)
+	})
+
+	req := httptest.NewRequest("GET", "/trace", nil)
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, req)
+
+	if trace == nil {
+		t.Fatal("trace was not attached")
+	}
+	if trace.RouteIndex == nil || *trace.RouteIndex != 4 {
+		t.Fatalf("RouteIndex=%v, want 4", trace.RouteIndex)
+	}
+	if trace.RouteMode != "mock" {
+		t.Fatalf("RouteMode=%q, want mock", trace.RouteMode)
+	}
+	if trace.RouteSource != "routes/trace.json5" {
+		t.Fatalf("RouteSource=%q", trace.RouteSource)
+	}
 }
 
 func TestRespond_PlainStringBodyInfersTextPlain(t *testing.T) {
@@ -554,7 +590,7 @@ func TestRespond_EnvAccessibleInTemplate(t *testing.T) {
 	r := rux.New()
 	envMap := map[string]any{"token": "T-FROM-ENV"}
 	r.GET("/", func(c *rux.Context) {
-		Respond(c, route, rdr, envMap)
+		Respond(c, route, 0, rdr, envMap)
 	})
 	srv := httptest.NewServer(r)
 	defer srv.Close()

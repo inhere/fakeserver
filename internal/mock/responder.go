@@ -18,6 +18,7 @@ import (
 	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/config"
+	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
@@ -32,7 +33,12 @@ import (
 //  7. write to ResponseWriter
 //
 // On any rendering error the response becomes 500 + JSON error body.
-func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer, envMap map[string]any) {
+func Respond(c *rux.Context, route *config.Route, routeIndex int, renderer tpl.Renderer, envMap map[string]any) {
+	respondWithTrace(c, route, routeIndex, "mock", nil, renderer, envMap)
+}
+
+func respondWithTrace(c *rux.Context, route *config.Route, routeIndex int, mode string, caseIndex *int, renderer tpl.Renderer, envMap map[string]any) {
+	recordRouteTrace(c, route, routeIndex, mode, caseIndex)
 	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil, envMap)
 
 	// 2. Render headers
@@ -110,6 +116,15 @@ func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer, envMap 
 		// reaches the wire by writing an empty payload.
 		_, _ = c.Resp.Write(nil)
 	}
+}
+
+func recordRouteTrace(c *rux.Context, route *config.Route, routeIndex int, mode string, caseIndex *int) {
+	recorder.SetRouteMatch(c.Req.Context(), recorder.RequestTrace{
+		RouteIndex:  &routeIndex,
+		CaseIndex:   caseIndex,
+		RouteMode:   mode,
+		RouteSource: route.SourceFile,
+	})
 }
 
 func renderHeaders(hdrs map[string]string, r tpl.Renderer, ctx map[string]any) (map[string]string, error) {

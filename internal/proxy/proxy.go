@@ -18,6 +18,7 @@ import (
 	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/config"
+	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/sizeparse"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
@@ -33,7 +34,7 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 		if route.Proxy == nil {
 			continue
 		}
-		handler, err := Build(route, renderer, cfg.Env)
+		handler, err := Build(route, i, renderer, cfg.Env)
 		if err != nil {
 			return fmt.Errorf("routes[%d] (%s %s): %w", i, strings.Join(route.Method, ","), route.Path, err)
 		}
@@ -58,7 +59,7 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 // All other fields (target, rewrite, stripPathPrefix, timeout, etc.) are
 // literal. The rewrite regex's $1, $2... are Go regexp capture groups,
 // NOT template variables.
-func Build(route *config.Route, renderer tpl.Renderer, envMap map[string]any) (rux.HandlerFunc, error) {
+func Build(route *config.Route, routeIndex int, renderer tpl.Renderer, envMap map[string]any) (rux.HandlerFunc, error) {
 	p := route.Proxy
 	if p == nil {
 		return nil, fmt.Errorf("Build called with nil Proxy")
@@ -169,6 +170,12 @@ func Build(route *config.Route, renderer tpl.Renderer, envMap map[string]any) (r
 
 	return func(c *rux.Context) {
 		req := c.Req
+		recorder.SetRouteMatch(req.Context(), recorder.RequestTrace{
+			RouteIndex:  &routeIndex,
+			RouteMode:   "proxy",
+			RouteSource: route.SourceFile,
+			ProxyTarget: p.Target,
+		})
 
 		// Apply bodyLimit on request body — too-large requests never reach upstream.
 		// We use readUpTo (not http.MaxBytesReader) because MaxBytesReader's error

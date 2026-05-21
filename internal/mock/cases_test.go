@@ -13,6 +13,7 @@ import (
 	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/config"
+	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
@@ -32,7 +33,7 @@ func startCasesServer(t *testing.T, route *config.Route, renderer tpl.Renderer) 
 	sel := NewSelector(route.Strategy)
 	r := rux.New()
 	h := func(c *rux.Context) {
-		RespondCases(c, route, matchers, sel, renderer, nil)
+		RespondCases(c, route, 0, matchers, sel, renderer, nil)
 	}
 	for _, m := range route.Method {
 		if m == "*" {
@@ -42,6 +43,56 @@ func startCasesServer(t *testing.T, route *config.Route, renderer tpl.Renderer) 
 		}
 	}
 	return httptest.NewServer(r)
+}
+
+func TestRespondCases_SetsCaseTrace(t *testing.T) {
+	route := &config.Route{
+		Method:     []string{"GET"},
+		Path:       "/cases",
+		SourceFile: "routes/cases.json5",
+		Strategy:   "first-match",
+		Cases: []config.RouteCase{
+			{When: `request.query.hit == "0"`, Status: 200, Body: "zero"},
+			{When: `request.query.hit == "1"`, Status: 200, Body: "one"},
+		},
+	}
+	matchers := make([]*Matcher, len(route.Cases))
+	for i, cs := range route.Cases {
+		m, err := CompileMatcher(cs.When)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matchers[i] = m
+	}
+	selector := NewSelector(route.Strategy)
+	rdr := tpl.NewRenderer(nil, nil, 0)
+	var trace *recorder.RequestTrace
+	r := rux.New()
+	r.GET("/cases", func(c *rux.Context) {
+		ctx, tr := recorder.WithRequestTrace(c.Req.Context())
+		trace = tr
+		c.Req = c.Req.WithContext(ctx)
+		RespondCases(c, route, 6, matchers, selector, rdr, nil)
+	})
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest("GET", "/cases?hit=1", nil))
+
+	if trace == nil {
+		t.Fatal("trace was not attached")
+	}
+	if trace.RouteIndex == nil || *trace.RouteIndex != 6 {
+		t.Fatalf("RouteIndex=%v, want 6", trace.RouteIndex)
+	}
+	if trace.CaseIndex == nil || *trace.CaseIndex != 1 {
+		t.Fatalf("CaseIndex=%v, want 1", trace.CaseIndex)
+	}
+	if trace.RouteMode != "cases" {
+		t.Fatalf("RouteMode=%q, want cases", trace.RouteMode)
+	}
+	if trace.RouteSource != "routes/cases.json5" {
+		t.Fatalf("RouteSource=%q", trace.RouteSource)
+	}
 }
 
 func TestRespondCases_FirstMatch_Hits(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/config"
+	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
@@ -35,6 +36,49 @@ func echoUpstream(t *testing.T) *httptest.Server {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("UP:" + r.Method + ":" + r.URL.Path + ":" + string(b)))
 	}))
+}
+
+func TestProxy_SetsRecorderTrace(t *testing.T) {
+	upstream := echoUpstream(t)
+	defer upstream.Close()
+	route := &config.Route{
+		Method:     []string{"GET"},
+		Path:       "/proxy",
+		SourceFile: "routes/proxy.json5",
+		Proxy:      &config.ProxyConfig{Target: upstream.URL},
+	}
+	rdr := tpl.NewRenderer(nil, nil, 1)
+	handler, err := Build(route, 3, rdr, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var trace *recorder.RequestTrace
+	r := rux.New()
+	r.GET("/proxy", func(c *rux.Context) {
+		ctx, tr := recorder.WithRequestTrace(c.Req.Context())
+		trace = tr
+		c.Req = c.Req.WithContext(ctx)
+		handler(c)
+	})
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest("GET", "/proxy", nil))
+
+	if trace == nil {
+		t.Fatal("trace was not attached")
+	}
+	if trace.RouteIndex == nil || *trace.RouteIndex != 3 {
+		t.Fatalf("RouteIndex=%v, want 3", trace.RouteIndex)
+	}
+	if trace.RouteMode != "proxy" {
+		t.Fatalf("RouteMode=%q, want proxy", trace.RouteMode)
+	}
+	if trace.RouteSource != "routes/proxy.json5" {
+		t.Fatalf("RouteSource=%q", trace.RouteSource)
+	}
+	if trace.ProxyTarget != upstream.URL {
+		t.Fatalf("ProxyTarget=%q, want %q", trace.ProxyTarget, upstream.URL)
+	}
 }
 
 func TestProxy_BasicForward(t *testing.T) {
@@ -126,7 +170,7 @@ func TestProxy_StripPathPrefix(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{{
 			Method: []string{"*"}, Path: "/api/*rest",
-			Proxy:  &config.ProxyConfig{Target: upstream.URL, StripPathPrefix: "/api"},
+			Proxy: &config.ProxyConfig{Target: upstream.URL, StripPathPrefix: "/api"},
 		}},
 	}
 	srv := startProxyServer(t, cfg)
@@ -253,7 +297,7 @@ func TestProxy_BodyLimit_413(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{{
 			Method: []string{"POST"}, Path: "/x",
-			Proxy:  &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
+			Proxy: &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
 		}},
 	}
 	srv := startProxyServer(t, cfg)
@@ -283,7 +327,7 @@ func TestProxy_Timeout_504(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{{
 			Method: []string{"GET"}, Path: "/x",
-			Proxy:  &config.ProxyConfig{Target: slow.URL, Timeout: "50ms"},
+			Proxy: &config.ProxyConfig{Target: slow.URL, Timeout: "50ms"},
 		}},
 	}
 	srv := startProxyServer(t, cfg)
@@ -310,7 +354,7 @@ func TestProxy_PreserveHost(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{{
 			Method: []string{"GET"}, Path: "/x",
-			Proxy:  &config.ProxyConfig{Target: upstream.URL, PreserveHost: true},
+			Proxy: &config.ProxyConfig{Target: upstream.URL, PreserveHost: true},
 		}},
 	}
 	srv := startProxyServer(t, cfg)
@@ -333,7 +377,7 @@ func TestProxy_BodyLimit_ExactlyAtLimit(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{{
 			Method: []string{"POST"}, Path: "/x",
-			Proxy:  &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
+			Proxy: &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
 		}},
 	}
 	srv := startProxyServer(t, cfg)
@@ -364,7 +408,7 @@ func TestProxy_BodyLimit_OneOverLimit(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{{
 			Method: []string{"POST"}, Path: "/x",
-			Proxy:  &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
+			Proxy: &config.ProxyConfig{Target: upstream.URL, BodyLimit: "16B"},
 		}},
 	}
 	srv := startProxyServer(t, cfg)

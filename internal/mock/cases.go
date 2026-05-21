@@ -33,7 +33,8 @@ import (
 // when-expressions CAN reference .request.body (they execute first and see
 // the parsed body), but case body/headers templates cannot. Phase 5 may
 // revisit this with an explicit context.WithValue or body-buffering layer.
-func RespondCases(c *rux.Context, route *config.Route, matchers []*Matcher, selector Selector, renderer tpl.Renderer, envMap map[string]any) {
+func RespondCases(c *rux.Context, route *config.Route, routeIndex int, matchers []*Matcher, selector Selector, renderer tpl.Renderer, envMap map[string]any) {
+	recordRouteTrace(c, route, routeIndex, "cases", nil)
 	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil, envMap)
 
 	filtered := make([]SelectorCase, 0, len(route.Cases))
@@ -60,8 +61,9 @@ func RespondCases(c *rux.Context, route *config.Route, matchers []*Matcher, sele
 	}
 
 	chosen := &route.Cases[pickedIdx]
+	recordRouteTrace(c, route, routeIndex, "cases", &pickedIdx)
 	virtual := caseAsRoute(route, chosen)
-	Respond(c, virtual, renderer, envMap)
+	respondWithTrace(c, virtual, routeIndex, "cases", &pickedIdx, renderer, envMap)
 }
 
 // caseAsRoute composes a virtual single-response Route by overlaying the
