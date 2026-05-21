@@ -111,6 +111,30 @@ func TestRunInitFull_CreatesCompleteExample(t *testing.T) {
 	}
 }
 
+func TestRunInitFull_IncludesCaptureConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := runInit(initOptions{cwd: tmpDir, full: true}); err != nil {
+		t.Fatalf("runInit full: %v", err)
+	}
+
+	cfgPath := filepath.Join(tmpDir, "fakeserver.json5")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "capture:") {
+		t.Fatalf("full config should include capture block: %s", data)
+	}
+
+	cfg, err := config.Load([]string{cfgPath}, "dev", nil)
+	if err != nil {
+		t.Fatalf("full config should load: %v", err)
+	}
+	if !cfg.Server.Capture.Enabled {
+		t.Fatal("full config should enable server.capture for the debug console demo")
+	}
+}
+
 func TestRunInitFull_RefusesOverwriteByDefault(t *testing.T) {
 	tmpDir := t.TempDir()
 	target := filepath.Join(tmpDir, "fakeserver.json5")

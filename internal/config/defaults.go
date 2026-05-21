@@ -30,6 +30,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.MaxBodySize == "" {
 		cfg.Server.MaxBodySize = "1MiB"
 	}
+	if cfg.Server.Capture.MaxBodySize == "" {
+		cfg.Server.Capture.MaxBodySize = "64KiB"
+	}
+	if len(cfg.Server.Capture.RedactKeys) == 0 {
+		cfg.Server.Capture.RedactKeys = []string{"authorization", "cookie", "password", "token", "secret"}
+	}
 	if cfg.Server.AdminEnabled == nil {
 		t := true
 		cfg.Server.AdminEnabled = &t

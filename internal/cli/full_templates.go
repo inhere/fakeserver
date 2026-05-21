@@ -35,6 +35,11 @@ const fullConfigTemplate = `{
     },
     log: true,
     maxBodySize: "2MiB",
+    capture: {
+      enabled: true,
+      maxBodySize: "64KiB",
+      redactKeys: ["authorization", "cookie", "password", "token", "secret"],
+    },
     adminEnabled: true,
     historySize: 200,
     osenvWhitelist: ["USER", "USERNAME", "COMPUTERNAME", "HOSTNAME", "FAKESERVER_DEMO_TOKEN"],

@@ -36,16 +36,25 @@ type Config struct {
 // applied by applyDefaults() in defaults.go when the field is its zero
 // value.
 type ServerOpts struct {
-	Host           string   `json:"host"`
-	Port           int      `json:"port"`
-	CORS           any      `json:"cors"` // true | false | object — kept as raw any here; Phase 5 parses
-	Log            *bool    `json:"log"`  // pointer to detect "unset" vs "false"
-	MaxBodySize    string   `json:"maxBodySize"`
-	AdminEnabled   *bool    `json:"adminEnabled"` // pointer：区分 explicit false vs 缺省（默认 true）
-	OSEnvWhitelist []string `json:"osenvWhitelist"`
-	FakerSeed      int64    `json:"fakerSeed"`
-	HistorySize    int      `json:"historySize"`
-	ProjectName    string   `json:"projectName"`
+	Host           string        `json:"host"`
+	Port           int           `json:"port"`
+	CORS           any           `json:"cors"` // true | false | object — kept as raw any here; Phase 5 parses
+	Log            *bool         `json:"log"`  // pointer to detect "unset" vs "false"
+	MaxBodySize    string        `json:"maxBodySize"`
+	Capture        CaptureConfig `json:"capture"`
+	AdminEnabled   *bool         `json:"adminEnabled"` // pointer：区分 explicit false vs 缺省（默认 true）
+	OSEnvWhitelist []string      `json:"osenvWhitelist"`
+	FakerSeed      int64         `json:"fakerSeed"`
+	HistorySize    int           `json:"historySize"`
+	ProjectName    string        `json:"projectName"`
+}
+
+// CaptureConfig controls v0.6 request/response capture for the Web UI
+// debug console.
+type CaptureConfig struct {
+	Enabled     bool     `json:"enabled"`
+	MaxBodySize string   `json:"maxBodySize"`
+	RedactKeys  []string `json:"redactKeys"`
 }
 
 // Route describes one declared route in JSON5. The same struct covers

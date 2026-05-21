@@ -21,8 +21,36 @@ func TestApplyDefaults_ZeroValues(t *testing.T) {
 	if cfg.Server.HistorySize != 200 {
 		t.Errorf("expected default historySize 200, got %d", cfg.Server.HistorySize)
 	}
+	if cfg.Server.Capture.Enabled {
+		t.Errorf("expected default capture.enabled=false")
+	}
+	if cfg.Server.Capture.MaxBodySize != "64KiB" {
+		t.Errorf("expected default capture.maxBodySize 64KiB, got %q", cfg.Server.Capture.MaxBodySize)
+	}
+	for _, key := range []string{"authorization", "cookie", "password", "token", "secret"} {
+		if !containsString(cfg.Server.Capture.RedactKeys, key) {
+			t.Errorf("expected default capture.redactKeys to contain %q; got %#v", key, cfg.Server.Capture.RedactKeys)
+		}
+	}
 	if cfg.Fallback != "echo" {
 		t.Errorf("expected default fallback=echo, got %q", cfg.Fallback)
+	}
+}
+
+func TestApplyDefaults_CaptureDefaults(t *testing.T) {
+	cfg := &Config{}
+	applyDefaults(cfg)
+	if cfg.Server.Capture.Enabled {
+		t.Fatal("capture.enabled default should be false")
+	}
+	if cfg.Server.Capture.MaxBodySize != "64KiB" {
+		t.Fatalf("capture.maxBodySize=%q, want 64KiB", cfg.Server.Capture.MaxBodySize)
+	}
+	wantKeys := []string{"authorization", "cookie", "password", "token", "secret"}
+	for _, key := range wantKeys {
+		if !containsString(cfg.Server.Capture.RedactKeys, key) {
+			t.Fatalf("capture.redactKeys=%#v missing %q", cfg.Server.Capture.RedactKeys, key)
+		}
 	}
 }
 
@@ -63,4 +91,13 @@ func TestDefaultPaths_ReturnsThreeCandidates(t *testing.T) {
 			t.Errorf("paths[%d]: want %q, got %q", i, want, paths[i])
 		}
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, v := range values {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }

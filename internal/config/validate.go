@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/expr-lang/expr"
+
+	"github.com/inhere/fakeserver/internal/sizeparse"
 )
 
 const reservedPrefix = "/__fakeserver/"
@@ -39,6 +41,12 @@ func Validate(cfg *Config) []error {
 	// fallback enum
 	if !validFallback[cfg.Fallback] {
 		errs = append(errs, fmt.Errorf("server.fallback: must be \"echo\" or \"404\", got %q", cfg.Fallback))
+	}
+
+	if cfg.Server.Capture.MaxBodySize != "" {
+		if _, err := sizeparse.ParseByteSize(cfg.Server.Capture.MaxBodySize); err != nil {
+			errs = append(errs, fmt.Errorf("server.capture.maxBodySize %q: %w", cfg.Server.Capture.MaxBodySize, err))
+		}
 	}
 
 	// route-level checks

@@ -96,6 +96,24 @@ func TestValidate_BadStrategy(t *testing.T) {
 	}
 }
 
+func TestValidate_CaptureBadMaxBodySize(t *testing.T) {
+	cfg := &Config{
+		Server: ServerOpts{
+			Capture: CaptureConfig{MaxBodySize: "64XB"},
+		},
+		Fallback: "echo",
+		Routes: []Route{{
+			Method: []string{"GET"},
+			Path:   "/x",
+			Body:   "ok",
+		}},
+	}
+	errs := Validate(cfg)
+	if !containsErrorWith(errs, "capture.maxBodySize", "64XB") {
+		t.Fatalf("expected capture.maxBodySize error, got %v", errs)
+	}
+}
+
 // containsErrorWith returns true if any error message contains every one
 // of the given substrings (case-sensitive).
 func containsErrorWith(errs []error, subs ...string) bool {
@@ -217,7 +235,7 @@ func TestWarn_ProxyTargetPrivateHost(t *testing.T) {
 				Fallback: "echo",
 				Routes: []Route{{
 					Method: []string{"*"}, Path: "/api/*rest",
-					Proxy:  &ProxyConfig{Target: tt.target},
+					Proxy: &ProxyConfig{Target: tt.target},
 				}},
 			}
 			warns := Warn(cfg)
