@@ -401,20 +401,20 @@ git commit -m "feat(config): add capture settings"
 
 新增/修改 logger tests：
 
-- [ ] `TestLogger_AppendsTraceFields`
+- [x] `TestLogger_AppendsTraceFields`
   - handler 调用 `recorder.SetRouteMatch(r.Context(), ...)`。
   - ring entry 包含 route mode/source/index/case/proxy target。
-- [ ] `TestLogger_CapturesTextRequestAndResponseBody`
+- [x] `TestLogger_CapturesTextRequestAndResponseBody`
   - capture enabled，POST JSON。
   - entry request/response body 均可见。
-- [ ] `TestLogger_RedactsSensitiveHeaders`
+- [x] `TestLogger_RedactsSensitiveHeaders`
   - request header `Authorization: Bearer abc`。
   - entry 中该 header 为 `"***"`。
-- [ ] `TestLogger_TruncatesBody`
+- [x] `TestLogger_TruncatesBody`
   - maxBodySize=8B。
   - response 写超过 8 字节。
   - entry response truncated=true，body 只含前 8 字节。
-- [ ] `TestLogger_DoesNotRenderBinaryBody`
+- [x] `TestLogger_DoesNotRenderBinaryBody`
   - response content-type 为 `application/octet-stream`。
   - entry response binary=true，body 为空。
 
@@ -1265,14 +1265,14 @@ git status
 
 - [x] recorder entry 有稳定递增 ID。
 - [x] `Ring.Get(id)` 可查询未覆盖 history entry。
-- [ ] logger 能从 request context 读取 route/case/proxy 命中信息。
+- [x] logger 能从 request context 读取 route/case/proxy 命中信息。
 - [ ] mock 单响应 route 写入 `routeMode=mock`、route index、source。
 - [ ] cases route 写入 `routeMode=cases`、route index、case index、source。
 - [ ] proxy route 写入 `routeMode=proxy`、route index、source、proxy target。
 - [x] `server.capture` schema/defaults/validate 完成。
-- [ ] capture enabled 时 request/response 文本 body 有限捕获。
-- [ ] capture 对敏感 headers 和 JSON body key 脱敏。
-- [ ] capture 对二进制 body 不直接展示。
+- [x] capture enabled 时 request/response 文本 body 有限捕获。
+- [x] capture 对敏感 headers 和 JSON body key 脱敏。
+- [x] capture 对二进制 body 不直接展示。
 - [ ] `/__fakeserver/routes` 返回 index/source/cases/proxyTarget/params。
 - [ ] `/__fakeserver/api/history/{id}` 返回单条详情，支持 400/404。
 - [ ] History 行可打开详情抽屉。
