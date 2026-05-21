@@ -94,6 +94,52 @@ func TestAPIHistory_ReturnsRingSnapshot(t *testing.T) {
 	}
 }
 
+func TestAPIHistoryDetail_ReturnsEntry(t *testing.T) {
+	ring := recorder.New(10)
+	ring.Append(recorder.Entry{Method: "GET", Path: "/p", Status: 200})
+
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", ring)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/history/1", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d", w.Code)
+	}
+	var got recorder.Entry
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != 1 || got.Path != "/p" {
+		t.Fatalf("entry=%+v", got)
+	}
+}
+
+func TestAPIHistoryDetail_NotFound(t *testing.T) {
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", recorder.New(10))
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/history/999", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestAPIHistoryDetail_BadID(t *testing.T) {
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", recorder.New(10))
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/history/nope", nil))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", w.Code)
+	}
+}
+
 func TestMount_AdminDisabled_NoEndpoints(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(false)}}
@@ -115,9 +161,9 @@ func TestMount_AdminDisabled_NoEndpoints(t *testing.T) {
 
 func TestRedactMap_NestedAndCaseInsensitive(t *testing.T) {
 	in := map[string]any{
-		"API_TOKEN":  "secret-1",
-		"nested":     map[string]any{"DB_PASSWORD": "secret-2", "user": "alice"},
-		"plain":      "visible",
+		"API_TOKEN":    "secret-1",
+		"nested":       map[string]any{"DB_PASSWORD": "secret-2", "user": "alice"},
+		"plain":        "visible",
 		"clientSecret": "secret-3",
 	}
 	out := redactMap(in)

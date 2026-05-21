@@ -84,6 +84,67 @@ func TestAdmin_RoutesEndpoint(t *testing.T) {
 	}
 }
 
+func TestRoutesHandler_IncludesDebugMetadata(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{
+			{
+				Method:     []string{"GET", "HEAD"},
+				Path:       "/u/{id}",
+				SourceFile: ".fakeserver/routes/users.json5",
+				Strategy:   "first-match",
+				Cases: []config.RouteCase{
+					{When: `request.query.empty == "1"`, Status: 200},
+					{Status: 404},
+				},
+			},
+			{
+				Method:     []string{"*"},
+				Path:       "/proxy/*rest",
+				SourceFile: ".fakeserver/routes/proxy.json5",
+				Proxy:      &config.ProxyConfig{Target: "https://example.test"},
+			},
+		},
+	}
+
+	r := rux.New()
+	admin.Mount(r, cfg)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/__fakeserver/routes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len=%d want 3", len(got))
+	}
+	first := got[0]
+	if first["index"].(float64) != 0 || first["source"].(string) != ".fakeserver/routes/users.json5" {
+		t.Fatalf("first metadata wrong: %+v", first)
+	}
+	if first["mode"].(string) != "cases" {
+		t.Fatalf("mode=%q want cases", first["mode"])
+	}
+	if params := first["params"].([]any); len(params) != 1 || params[0].(string) != "id" {
+		t.Fatalf("params=%v want [id]", params)
+	}
+	if cases := first["cases"].([]any); len(cases) != 2 {
+		t.Fatalf("cases=%v want len 2", cases)
+	}
+	proxy := got[2]
+	if proxy["proxyTarget"].(string) != "https://example.test" {
+		t.Fatalf("proxyTarget=%q", proxy["proxyTarget"])
+	}
+	if params := proxy["params"].([]any); len(params) != 1 || params[0].(string) != "rest" {
+		t.Fatalf("proxy params=%v want [rest]", params)
+	}
+}
+
 func TestAdmin_RoutesEmptyConfig(t *testing.T) {
 	r := rux.New()
 	admin.Mount(r, nil)

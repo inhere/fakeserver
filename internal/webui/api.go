@@ -2,6 +2,7 @@ package webui
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gookit/rux/v2"
@@ -43,6 +44,27 @@ func apiHistoryHandler(ring *recorder.Ring) rux.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, ring.Snapshot())
+	}
+}
+
+func apiHistoryDetailHandler(ring *recorder.Ring) rux.HandlerFunc {
+	return func(c *rux.Context) {
+		rawID := c.Param("id")
+		id, err := strconv.ParseUint(rawID, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid history id"})
+			return
+		}
+		if ring == nil {
+			c.JSON(http.StatusNotFound, map[string]string{"error": "history entry not found"})
+			return
+		}
+		entry, ok := ring.Get(id)
+		if !ok {
+			c.JSON(http.StatusNotFound, map[string]string{"error": "history entry not found"})
+			return
+		}
+		c.JSON(http.StatusOK, entry)
 	}
 }
 

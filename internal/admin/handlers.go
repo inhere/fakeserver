@@ -4,6 +4,7 @@ package admin
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gookit/rux/v2"
 
@@ -35,7 +36,7 @@ func routesHandler(cfg *config.Config) rux.HandlerFunc {
 	return func(c *rux.Context) {
 		out := []map[string]any{}
 		if cfg != nil {
-			for _, route := range cfg.Routes {
+			for i, route := range cfg.Routes {
 				mode := "mock"
 				if route.Proxy != nil {
 					mode = "proxy"
@@ -43,14 +44,46 @@ func routesHandler(cfg *config.Config) rux.HandlerFunc {
 					mode = "cases"
 				}
 				for _, m := range route.Method {
-					out = append(out, map[string]any{
+					item := map[string]any{
+						"index":  i,
 						"method": m,
 						"path":   route.Path,
 						"mode":   mode,
-					})
+						"source": route.SourceFile,
+						"params": routeParams(route.Path),
+					}
+					if len(route.Cases) > 0 {
+						cases := make([]map[string]any, len(route.Cases))
+						for ci, cs := range route.Cases {
+							cases[ci] = map[string]any{
+								"index":  ci,
+								"when":   cs.When,
+								"status": cs.Status,
+							}
+						}
+						item["cases"] = cases
+					}
+					if route.Proxy != nil {
+						item["proxyTarget"] = route.Proxy.Target
+					}
+					out = append(out, item)
 				}
 			}
 		}
 		c.JSON(http.StatusOK, out)
 	}
+}
+
+func routeParams(path string) []string {
+	var out []string
+	for _, part := range strings.Split(path, "/") {
+		if len(part) >= 3 && strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
+			out = append(out, strings.TrimSuffix(strings.TrimPrefix(part, "{"), "}"))
+			continue
+		}
+		if strings.HasPrefix(part, "*") && len(part) > 1 {
+			out = append(out, strings.TrimPrefix(part, "*"))
+		}
+	}
+	return out
 }
