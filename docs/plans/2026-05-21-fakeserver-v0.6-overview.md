@@ -665,18 +665,18 @@ git commit -m "feat(recorder): record route match metadata"
 
 Admin routes:
 
-- [ ] `TestRoutesHandler_IncludesDebugMetadata`
+- [x] `TestRoutesHandler_IncludesDebugMetadata`
   - 返回字段包含 `index/source/method/path/mode/cases/proxyTarget/params`。
   - 多 method route 仍一 method 一条。
 
 History detail:
 
-- [ ] `TestAPIHistoryDetail_ReturnsEntry`
+- [x] `TestAPIHistoryDetail_ReturnsEntry`
   - ring append 一条 entry。
   - `GET /__fakeserver/api/history/1` 返回该 entry。
-- [ ] `TestAPIHistoryDetail_NotFound`
+- [x] `TestAPIHistoryDetail_NotFound`
   - 请求不存在 ID 返回 404 JSON。
-- [ ] `TestAPIHistoryDetail_BadID`
+- [x] `TestAPIHistoryDetail_BadID`
   - 请求非数字 ID 返回 400 JSON。
 
 Run:
@@ -1273,8 +1273,8 @@ git status
 - [x] capture enabled 时 request/response 文本 body 有限捕获。
 - [x] capture 对敏感 headers 和 JSON body key 脱敏。
 - [x] capture 对二进制 body 不直接展示。
-- [ ] `/__fakeserver/routes` 返回 index/source/cases/proxyTarget/params。
-- [ ] `/__fakeserver/api/history/{id}` 返回单条详情，支持 400/404。
+- [x] `/__fakeserver/routes` 返回 index/source/cases/proxyTarget/params。
+- [x] `/__fakeserver/api/history/{id}` 返回单条详情，支持 400/404。
 - [ ] History 行可打开详情抽屉。
 - [ ] History 详情展示 request/response headers/body 与 route metadata。
 - [ ] Copy as curl 可用，默认脱敏敏感 header。
