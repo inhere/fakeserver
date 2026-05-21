@@ -296,13 +296,13 @@ git commit -m "feat(recorder): add entry ids and request trace"
 
 ### 6.1 Step 1: 写 failing tests
 
-- [ ] `TestApplyDefaults_CaptureDefaults`
+- [x] `TestApplyDefaults_CaptureDefaults`
   - 默认 `cfg.Server.Capture.Enabled == false`。
   - 默认 `MaxBodySize == "64KiB"`。
   - 默认 redact keys 包含 `authorization/cookie/password/token/secret`。
-- [ ] `TestValidate_CaptureBadMaxBodySize`
+- [x] `TestValidate_CaptureBadMaxBodySize`
   - `server.capture.maxBodySize: "64XB"` 返回 validate error。
-- [ ] `TestRunInitFull_IncludesCaptureConfig`
+- [x] `TestRunInitFull_IncludesCaptureConfig`
   - full init 生成的根配置包含 `capture`。
   - 加载后 `cfg.Server.Capture.Enabled == true`。
 
@@ -347,12 +347,12 @@ Capture: CaptureConfig{
 
 ### 6.3 Step 3: validate capture
 
-- [ ] 复用 `proxy.ParseByteSize` 或迁移 byte size parser 到更中性的包。
-- [ ] 为避免 `config -> proxy` 反向语义依赖继续扩大，推荐新增 `internal/sizeparse`：
+- [x] 复用 `proxy.ParseByteSize` 或迁移 byte size parser 到更中性的包。
+- [x] 为避免 `config -> proxy` 反向语义依赖继续扩大，推荐新增 `internal/sizeparse`：
   - `internal/sizeparse/sizeparse.go`
   - `internal/sizeparse/sizeparse_test.go`
   - proxy 和 config 都依赖它。
-- [ ] 如果迁移，保留 `proxy.ParseByteSize` 包装函数，避免破坏 `cli.parseMaxBodySize` 调用：
+- [x] 如果迁移，保留 `proxy.ParseByteSize` 包装函数，避免破坏 `cli.parseMaxBodySize` 调用：
 
 ```go
 func ParseByteSize(s string) (int64, error) {
@@ -1269,7 +1269,7 @@ git status
 - [ ] mock 单响应 route 写入 `routeMode=mock`、route index、source。
 - [ ] cases route 写入 `routeMode=cases`、route index、case index、source。
 - [ ] proxy route 写入 `routeMode=proxy`、route index、source、proxy target。
-- [ ] `server.capture` schema/defaults/validate 完成。
+- [x] `server.capture` schema/defaults/validate 完成。
 - [ ] capture enabled 时 request/response 文本 body 有限捕获。
 - [ ] capture 对敏感 headers 和 JSON body key 脱敏。
 - [ ] capture 对二进制 body 不直接展示。
@@ -1280,7 +1280,7 @@ git status
 - [ ] Copy as curl 可用，默认脱敏敏感 header。
 - [ ] Replay request 可用，并说明浏览器 forbidden header/body 未捕获限制。
 - [ ] Routes 页面 route tester 可发送 GET/POST 请求。
-- [ ] `init --full` 示例启用 capture。
+- [x] `init --full` 示例启用 capture。
 - [ ] `docs/usage/frontend-workflow.md` 更新 v0.6 用法。
 - [ ] `docs/fakeserver-design.md` 追加 v0.6 落地记录。
 - [ ] `go test ./... -count=1` 通过。
