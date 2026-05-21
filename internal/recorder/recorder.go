@@ -10,6 +10,7 @@ import (
 
 // Entry 是 ring 中单条记录（design §11.4）。不包含请求/响应 body。
 type Entry struct {
+	ID          uint64    `json:"id"`
 	TS          time.Time `json:"ts"`
 	Method      string    `json:"method"`
 	Path        string    `json:"path"`
@@ -51,14 +52,15 @@ const subscriberChanCap = 32
 
 // Ring 是固定容量的环形缓冲 + 多订阅者广播管理器。
 type Ring struct {
-	mu   sync.RWMutex
-	buf  []Entry
-	head int
-	size int
+	mu          sync.RWMutex
+	buf         []Entry
+	head        int
+	size        int
+	nextEntryID uint64
 
-	subsMu       sync.Mutex
-	subscribers  map[uint64]chan Event
-	nextSubID    uint64
+	subsMu        sync.Mutex
+	subscribers   map[uint64]chan Event
+	nextSubID     uint64
 	eventsDropped uint64 // atomic
 }
 
@@ -81,6 +83,10 @@ func (r *Ring) Cap() int {
 // Append 写入一条新 Entry。满时覆盖最旧条目。同时向所有订阅者广播 Event{Kind:Request}。
 func (r *Ring) Append(e Entry) {
 	r.mu.Lock()
+	if e.ID == 0 {
+		r.nextEntryID++
+		e.ID = r.nextEntryID
+	}
 	r.buf[r.head] = e
 	r.head = (r.head + 1) % len(r.buf)
 	if r.size < len(r.buf) {
@@ -89,6 +95,22 @@ func (r *Ring) Append(e Entry) {
 	r.mu.Unlock()
 
 	r.broadcast(Event{Kind: EventRequest, Entry: &e})
+}
+
+// Get returns the entry with id if it is still retained in the ring.
+func (r *Ring) Get(id uint64) (Entry, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for i := 0; i < r.size; i++ {
+		idx := i
+		if r.size == len(r.buf) {
+			idx = (r.head + i) % len(r.buf)
+		}
+		if r.buf[idx].ID == id {
+			return r.buf[idx], true
+		}
+	}
+	return Entry{}, false
 }
 
 // EmitReload 向所有订阅者广播 reload 事件。Phase 3 watcher onReload 调用。

@@ -37,6 +37,58 @@ func TestAppend_Snapshot_ChronologicalOrder(t *testing.T) {
 	}
 }
 
+func TestRingAppend_AssignsIncreasingIDs(t *testing.T) {
+	r := New(3)
+	for i := 1; i <= 3; i++ {
+		r.Append(Entry{Path: "/p", Status: 200 + i})
+	}
+	got := r.Snapshot()
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3", len(got))
+	}
+	for i, e := range got {
+		want := uint64(i + 1)
+		if e.ID != want {
+			t.Errorf("snapshot[%d].ID=%d, want %d", i, e.ID, want)
+		}
+	}
+}
+
+func TestRingGet_ReturnsEntryByID(t *testing.T) {
+	r := New(3)
+	r.Append(Entry{Path: "/one", Status: 201})
+	r.Append(Entry{Path: "/two", Status: 202})
+
+	got, ok := r.Get(1)
+	if !ok {
+		t.Fatal("Get(1) ok=false, want true")
+	}
+	if got.Path != "/one" || got.Status != 201 {
+		t.Fatalf("Get(1)=%+v, want first entry", got)
+	}
+	if _, ok := r.Get(999); ok {
+		t.Fatal("Get(999) ok=true, want false")
+	}
+}
+
+func TestRingGet_OverwrittenEntryNotFound(t *testing.T) {
+	r := New(2)
+	r.Append(Entry{Path: "/one"})
+	r.Append(Entry{Path: "/two"})
+	r.Append(Entry{Path: "/three"})
+
+	if _, ok := r.Get(1); ok {
+		t.Fatal("Get(1) ok=true after overwrite, want false")
+	}
+	got, ok := r.Get(3)
+	if !ok {
+		t.Fatal("Get(3) ok=false, want true")
+	}
+	if got.Path != "/three" {
+		t.Fatalf("Get(3).Path=%q, want /three", got.Path)
+	}
+}
+
 func TestAppend_OverwritesOldestWhenFull(t *testing.T) {
 	r := New(3)
 	for i := 1; i <= 5; i++ {
