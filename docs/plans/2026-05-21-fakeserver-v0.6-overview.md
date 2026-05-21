@@ -985,14 +985,14 @@ git commit -m "feat(webui): replay history requests"
 
 断言 assets 包含：
 
-- [ ] `route-tester`
-- [ ] `tester-method`
-- [ ] `tester-path`
-- [ ] `tester-query`
-- [ ] `tester-headers`
-- [ ] `tester-body`
-- [ ] `tester-send`
-- [ ] `tester-response`
+- [x] `route-tester`
+- [x] `tester-method`
+- [x] `tester-path`
+- [x] `tester-query`
+- [x] `tester-headers`
+- [x] `tester-body`
+- [x] `tester-send`
+- [x] `tester-response`
 
 Run:
 
@@ -1279,7 +1279,7 @@ git status
 - [x] History 详情展示 request/response headers/body 与 route metadata。
 - [x] Copy as curl 可用，默认脱敏敏感 header。
 - [x] Replay request 可用，并说明浏览器 forbidden header/body 未捕获限制。
-- [ ] Routes 页面 route tester 可发送 GET/POST 请求。
+- [x] Routes 页面 route tester 可发送 GET/POST 请求。
 - [x] `init --full` 示例启用 capture。
 - [ ] `docs/usage/frontend-workflow.md` 更新 v0.6 用法。
 - [ ] `docs/fakeserver-design.md` 追加 v0.6 落地记录。
