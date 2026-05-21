@@ -28,13 +28,13 @@ import (
 )
 
 type serveOptions struct {
-	Port       int
-	Host       string
-	ConfigFlag string
-	Quiet      bool
-	NoCORS     bool
-	NoWatch    bool
-	EnvName     string       // --env / -e <name>; "" → fallback FAKESERVER_ENV → file $active → first segment
+	Port         int
+	Host         string
+	ConfigFlag   string
+	Quiet        bool
+	NoCORS       bool
+	NoWatch      bool
+	EnvName      string       // --env / -e <name>; "" → fallback FAKESERVER_ENV → file $active → first segment
 	VarOverrides gcli.Strings // --var key=val (multi-flag accumulating; CSV inside single flag allowed)
 }
 

@@ -214,7 +214,7 @@ git commit -m "test(cli): cover v0.4 web UI integration"
 - Modify: `docs/fakeserver-design.md`
 - Modify: `docs/plans/v0.4/2026-05-21-fakeserver-v0.4-phase3-webui-assets.md`
 
-- [ ] **Step 1: Run quality gates**
+- [x] **Step 1: Run quality gates**
 
 ```bash
 go test ./... -count=1
@@ -227,7 +227,7 @@ Expected:
 - all commands exit 0
 - `internal/webui` coverage does not drop below the Phase 2 baseline materially
 
-- [ ] **Step 2: Update docs**
+- [x] **Step 2: Update docs**
 
 Update:
 - v0.4 overview §2 Phase 3 status to `✅ 已完成`
@@ -236,7 +236,7 @@ Update:
 - `docs/fakeserver-design.md` 修订记录追加 `v0.4-phase0.4.3-applied`
 - `docs/fakeserver-design.md` §13 追加 `v0.4 Phase 3 阶段确认`，严格 3 条事实
 
-- [ ] **Step 3: Close beads issue and commit**
+- [x] **Step 3: Close beads issue and commit**
 
 ```bash
 bd close lite-tools-xzn --reason="fakeserver v0.4 Phase 3 Web UI completed"
@@ -248,12 +248,12 @@ git commit -m "docs(v0.4): close Phase 3 web UI milestone"
 
 ## DoD Checklist
 
-- [ ] `/__fakeserver/ui/` returns embedded HTML with 4 view links
-- [ ] UI assets are fully embedded under `internal/webui/assets/`
-- [ ] No CDN, no external asset URL, no JS build chain
-- [ ] History view loads `/api/history` and appends live `event: request`
-- [ ] Reload SSE event is emitted after successful watcher swap
-- [ ] `adminEnabled:false` disables UI routes
-- [ ] `go test ./... -count=1`, `go vet ./...`, and `go build ./...` pass
-- [ ] v0.4 overview and design §13 are updated
-- [ ] `lite-tools-xzn` is closed
+- [x] `/__fakeserver/ui/` returns embedded HTML with 4 view links
+- [x] UI assets are fully embedded under `internal/webui/assets/`
+- [x] No CDN, no external asset URL, no JS build chain
+- [x] History view loads `/api/history` and appends live `event: request`
+- [x] Reload SSE event is emitted after successful watcher swap
+- [x] `adminEnabled:false` disables UI routes
+- [x] `go test ./... -count=1`, `go vet ./...`, and `go build ./...` pass
+- [x] v0.4 overview and design §13 are updated
+- [x] `lite-tools-xzn` is closed

@@ -22,6 +22,7 @@
 | 2026-05-20 | v0.4-phase0.3.2-applied | inhere | v0.3 Phase 2：list/use 子命令 + envs 提取 + 跨进程并发 E2E + v0.3 milestone 闭环 |
 | 2026-05-21 | v0.4-phase0.4.1-applied | inhere | v0.4 Phase 1：recorder 包 + middleware logger 接入 + 3 个 JSON API + adminEnabled 护栏（含 *bool 升级） |
 | 2026-05-21 | v0.4-phase0.4.2-applied | inhere | v0.4 Phase 2：SSE /events + recorder.Subscribe 多订阅 + 心跳 + EmitReload 接口（watcher 接入留 Phase 3） |
+| 2026-05-21 | v0.4-phase0.4.3-applied | inhere | v0.4 Phase 3：embed 静态 UI + 4 个只读视图 + EventSource 历史追加 + watcher reload SSE 接入 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1296,6 +1297,12 @@ if seed == 0 {
 1. **SSE 端点 `/__fakeserver/events` 实时推送**：Subscribe 返回 `<-chan Event` + cancel；Event 是 `{Kind, Entry, Reload}` 判别联合，让 EventRequest 与 EventReload 共享一条 channel。Logger 中 Append 时 broadcast 给所有订阅者；SSE handler 按 Kind 序列化为 `event: request|reload\ndata: <json>\n\n` 帧。
 2. **慢客户端非阻塞 + EventsDropped 计数**：单订阅者 channel 容量 32；broadcast 持 subsMu 仅收集 channel 引用、发送在锁外；满 channel → 丢弃此事件 + `eventsDropped` atomic 自增——精确实现 §11.5 "慢客户端不阻塞其他客户端"契约。
 3. **心跳 15s + 客户端断开自动 unsubscribe**：SSE handler 用 `time.Ticker` 周期发 `: ping\n\n`（mount.go 注册时 15s，测试注入 80ms 验证）；监听 `c.Req.Context().Done()` → return + defer cancel() 触发订阅者 close。EmitReload 接口已就绪，watcher 端调用接入留 Phase 3。
+
+### 已落地（v0.4 Phase 3 阶段确认）
+
+1. **Web UI 静态资源完全 embed**：`internal/webui/assets.go` 使用 `//go:embed assets/*`，`Mount` 注册 `/__fakeserver/ui/` 与 `/__fakeserver/ui/*path`；HTML/CSS/JS 全部在 `internal/webui/assets/` 下，无 CDN、无构建链、无运行期外部文件依赖。
+2. **4 个只读视图端到端可用**：单页 hash UI 提供 Projects/Routes/History/Config 四个视图，分别读取 `/api/projects`、`/__fakeserver/routes`、`/api/history`、`/api/config`；history 视图通过 `EventSource('/__fakeserver/events')` 追加 `event: request`，config 视图展示已脱敏 JSON。
+3. **reload 事件从 watcher 接入 SSE**：serve watcher 成功 `holder.Swap` 后对比旧/新 route 轻量签名并调用 `ring.EmitReload`，UI 收到 `event: reload` 后显示 added/removed/changed 计数并刷新数据；`adminEnabled:false` 下 UI 路由同样返回 404。
 
 ### 待评审
 

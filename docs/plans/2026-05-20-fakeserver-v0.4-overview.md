@@ -11,6 +11,7 @@
 | 2026-05-20 | v0.4-overview | inhere | 初稿。固化 v0.4 内部的 3 Phase 拆分（内核 + SSE + UI 资源）|
 | 2026-05-21 | v0.4-overview-phase1-applied | inhere | Phase 1 落地：recorder 包 + middleware logger 接入 + webui 3 JSON API + adminEnabled 护栏 |
 | 2026-05-21 | v0.4-overview-phase2-applied | inhere | Phase 2 落地：SSE /events + recorder.Subscribe 多订阅 + 心跳 + EmitReload 接口 |
+| 2026-05-21 | v0.4-overview-phase3-applied | inhere | Phase 3 落地：embed UI 资源 + 4 个只读视图 + watcher reload SSE 接入 + v0.4 闭环 |
 
 后续修订：每完成一个 Phase 后在对应行回写 commit 摘要与实际偏差。
 
@@ -35,7 +36,7 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 |---|---|---|---|---|---|---|
 | **1** | `internal/recorder` 包（环形缓冲 + Append/Snapshot）+ middleware logger 接入 + `webui/api.go` 3 个 JSON 端点（projects/config/history）+ adminEnabled 安全护栏 | `internal/recorder/` + `internal/webui/{mount,api}.go` + middleware/logger 改造 | — | v0.3 | ~500 行 | ✅ 已完成 (commit 64bdf5a..38ff74a) |
 | **2** | SSE 实时推送 `/__fakeserver/events` + recorder.Subscribe 多订阅 + 心跳 15s + 慢客户端非阻塞丢包 | `internal/webui/sse.go` + recorder Subscribe/Unsubscribe | — | Phase 1 | ~300 行 | ✅ 已完成 (commit 7148453..911c54e) |
-| **3** | embed 静态资源 + 4 个 UI 页面（侧栏项目列表 / 路由 / 历史 / 配置）+ 极简 HTML/CSS/JS + 综合 E2E + 文档收尾 | `internal/webui/assets/` + page handlers + v0.4 milestone 闭环 | — | Phase 2 | ~600 行 | 待开始 |
+| **3** | embed 静态资源 + 4 个 UI 页面（侧栏项目列表 / 路由 / 历史 / 配置）+ 极简 HTML/CSS/JS + 综合 E2E + 文档收尾 | `internal/webui/assets/` + page handlers + v0.4 milestone 闭环 | — | Phase 2 | ~600 行 | ✅ 已完成 (commit 8802f1e..e5ff5ec) |
 
 总计：v0.4 ≈ 1400 行代码（含测试 + 静态资源），分 3 期落地。
 
@@ -237,6 +238,22 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 9. bd v0.4 总 milestone epic 关闭；`bd ready` 无 v0.4 相关 issue
 
 **对 design 章节的映射**：§11.2（4 个页面）/ §11.3（剩余 `event: reload` 端到端） / §14 v0.4 行清空"待开始"。
+
+**实际落地偏差**：
+
+- **UI 采用单页 hash 路由**：未拆 `routes.html/history.html/config.html` 多页面文件；实际为 `index.html + style.css + main.js`，通过 `#projects/#routes/#history/#config` 切换视图。这样 embed 资源面更小，也避免重复页面 shell。
+- **config 页为格式化 JSON 只读展示**：按 DoD 裁掉 JSON5 语法高亮；`/api/config` 已经是脱敏后的 JSON 结构，UI 直接 `JSON.stringify(..., null, 2)` 输出。
+- **reload diff 在 cli 层计算轻量签名**：watcher 本身仍只负责文件事件与防抖；`serve.go` 在成功 `holder.Swap` 后对比旧/新 route 的 method+path、mode、status、cases、proxy target、body/bodyFile 等轻量字段，然后 `ring.EmitReload`。不做深层模板/headers 语义 diff，满足 UI 提示需求。
+- **不引入浏览器端构建链**：静态资源完全手写，无 npm、无 CDN、无外链字体/图标；视觉采用紧凑运维工作台风格，优先可扫描与稳定布局。
+
+**Phase 3 测试覆盖**：新增/扩展 10+ 个断言（webui 静态资源 5 类 + cli v0.4 UI 集成 + reload diff + reload event）；`internal/recorder` **100.0%**；`internal/webui` **83.5%**（高于 Phase 2 82.7%）；`go test ./... -count=1`、`go vet ./...`、`go build ./...` 均通过。
+
+**Phase 3 commit 流水**：
+- Task 1: `8802f1e` (embed UI asset handler)
+- Task 2: `a2411ed` (read-only dashboard assets)
+- Task 3: `cf22b1a` (watcher swap 后 emit reload SSE event)
+- Task 4: `ea15ae3` (v0.4 Web UI 集成 E2E)
+- Task 5: `e5ff5ec` (文档收尾 + design §13 + beads issue 关闭)
 
 ---
 
