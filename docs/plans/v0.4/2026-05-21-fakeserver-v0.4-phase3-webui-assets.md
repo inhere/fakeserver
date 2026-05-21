@@ -177,7 +177,7 @@ git commit -m "feat(cli): emit reload SSE events after watcher swap"
 **Files:**
 - Modify: `internal/cli/serve_v04_e2e_test.go`
 
-- [ ] **Step 1: Write E2E assertions**
+- [x] **Step 1: Write E2E assertions**
 
 Extend existing v0.4 E2E:
 - `GET /__fakeserver/ui/` contains `<title>fakeserver</title>` and 4 view links
@@ -193,11 +193,11 @@ go test ./internal/cli -run TestServe_v04 -count=1
 
 Expected: fail before Task 1/2, pass after current implementation.
 
-- [ ] **Step 2: Fix only integration gaps**
+- [x] **Step 2: Fix only integration gaps**
 
 Do not add new UI features here. This task only wires E2E expectations against already implemented behavior.
 
-- [ ] **Step 3: Run tests and commit**
+- [x] **Step 3: Run tests and commit**
 
 ```bash
 go test ./internal/cli -run TestServe_v04 -count=1

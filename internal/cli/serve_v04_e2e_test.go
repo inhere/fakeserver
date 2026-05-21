@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -69,6 +70,26 @@ func TestServe_v04_WebUIAPIs(t *testing.T) {
 		t.Errorf("api/projects status=%d", resp.StatusCode)
 	}
 	resp.Body.Close()
+
+	resp, _ = http.Get(srv.URL + "/__fakeserver/ui/")
+	uiBody := readBodyString(t, resp)
+	if resp.StatusCode != 200 {
+		t.Errorf("ui status=%d", resp.StatusCode)
+	}
+	for _, want := range []string{"<title>fakeserver</title>", "#projects", "#routes", "#history", "#config"} {
+		if !strings.Contains(uiBody, want) {
+			t.Errorf("ui body missing %q", want)
+		}
+	}
+
+	resp, _ = http.Get(srv.URL + "/__fakeserver/ui/style.css")
+	cssBody := readBodyString(t, resp)
+	if resp.StatusCode != 200 {
+		t.Errorf("ui style status=%d", resp.StatusCode)
+	}
+	if !strings.Contains(cssBody, ".sidebar") {
+		t.Error("ui style should contain .sidebar selector")
+	}
 }
 
 // TestServe_v04_SSE_EventsEndpoint 验证 v0.4 Phase 2 集成：完整 assembleHandler
@@ -144,6 +165,12 @@ func TestServe_v04_AdminDisabled_NoUIEndpoints(t *testing.T) {
 		t.Errorf("api/history with adminEnabled=false should be 404; got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
+
+	resp, _ = http.Get(srv.URL + "/__fakeserver/ui/")
+	if resp.StatusCode != 404 {
+		t.Errorf("ui with adminEnabled=false should be 404; got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
 }
 
 func TestRouteReloadDiff_DetectsAddedRemovedChanged(t *testing.T) {
@@ -200,4 +227,14 @@ func assertStringSet(t *testing.T, got, want []string) {
 			t.Fatalf("got %v, want %v", got, want)
 		}
 	}
+}
+
+func readBodyString(t *testing.T, resp *http.Response) string {
+	t.Helper()
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
