@@ -18,7 +18,7 @@ func TestLogger_FormatsAccessLine(t *testing.T) {
 		w.WriteHeader(201)
 		_, _ = w.Write([]byte("ok"))
 	})
-	Logger(&buf, false, nil)(h).ServeHTTP(
+	Logger(&buf, LoggerOptions{}, nil)(h).ServeHTTP(
 		httptest.NewRecorder(),
 		httptest.NewRequest("POST", "/users", nil),
 	)
@@ -42,7 +42,7 @@ func TestLogger_QuietSuppresses(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	})
-	Logger(&buf, true, nil)(h).ServeHTTP(
+	Logger(&buf, LoggerOptions{Quiet: true}, nil)(h).ServeHTTP(
 		httptest.NewRecorder(),
 		httptest.NewRequest("GET", "/x", nil),
 	)
@@ -56,7 +56,7 @@ func TestLogger_StatusDefaultsTo200(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hi"))
 	})
-	Logger(&buf, false, nil)(h).ServeHTTP(
+	Logger(&buf, LoggerOptions{}, nil)(h).ServeHTTP(
 		httptest.NewRecorder(),
 		httptest.NewRequest("GET", "/x", nil),
 	)
@@ -69,7 +69,7 @@ func TestLogger_NilOutDoesNotPanic(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	})
-	Logger(io.Discard, false, nil)(h).ServeHTTP(
+	Logger(io.Discard, LoggerOptions{}, nil)(h).ServeHTTP(
 		httptest.NewRecorder(),
 		httptest.NewRequest("GET", "/x", nil),
 	)
@@ -96,7 +96,7 @@ func TestLogger_FlushPassesThrough(t *testing.T) {
 			t.Error("loggingResponseWriter should implement http.Flusher")
 		}
 	})
-	Logger(&buf, false, nil)(h).ServeHTTP(fr, httptest.NewRequest("GET", "/x", nil))
+	Logger(&buf, LoggerOptions{}, nil)(h).ServeHTTP(fr, httptest.NewRequest("GET", "/x", nil))
 	if fr.flushed != 2 {
 		t.Errorf("Flush() not propagated to inner: got %d calls want 2", fr.flushed)
 	}
@@ -108,7 +108,7 @@ func TestLogger_5xxStatusLogged(t *testing.T) {
 		w.WriteHeader(503)
 		_, _ = w.Write([]byte("svc unavail"))
 	})
-	Logger(&buf, false, nil)(h).ServeHTTP(
+	Logger(&buf, LoggerOptions{}, nil)(h).ServeHTTP(
 		httptest.NewRecorder(),
 		httptest.NewRequest("GET", "/x", nil),
 	)
@@ -126,7 +126,7 @@ func TestLogger_WithRing_AppendsEntry(t *testing.T) {
 		w.WriteHeader(201)
 		_, _ = w.Write([]byte("created"))
 	})
-	Logger(&buf, false, ring)(h).ServeHTTP(
+	Logger(&buf, LoggerOptions{}, ring)(h).ServeHTTP(
 		httptest.NewRecorder(),
 		httptest.NewRequest("POST", "/users", nil),
 	)
@@ -151,7 +151,7 @@ func TestLogger_QuietWithRing_StillAppends(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
-	Logger(&buf, true, ring)(h).ServeHTTP(
+	Logger(&buf, LoggerOptions{Quiet: true}, ring)(h).ServeHTTP(
 		httptest.NewRecorder(),
 		httptest.NewRequest("GET", "/p", nil),
 	)
@@ -160,5 +160,137 @@ func TestLogger_QuietWithRing_StillAppends(t *testing.T) {
 	}
 	if got := ring.Snapshot(); len(got) != 1 {
 		t.Errorf("ring should still record %d entries; want 1", len(got))
+	}
+}
+
+func TestLogger_AppendsTraceFields(t *testing.T) {
+	ring := recorder.New(10)
+	routeIndex := 2
+	caseIndex := 1
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recorder.SetRouteMatch(r.Context(), recorder.RequestTrace{
+			RouteIndex:  &routeIndex,
+			CaseIndex:   &caseIndex,
+			RouteMode:   "cases",
+			RouteSource: "routes/users.json5",
+			ProxyTarget: "https://example.test",
+		})
+		w.WriteHeader(202)
+	})
+
+	Logger(io.Discard, LoggerOptions{Quiet: true}, ring)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		httptest.NewRequest("GET", "/trace", nil),
+	)
+
+	e := ring.Snapshot()[0]
+	if e.RouteIndex == nil || *e.RouteIndex != routeIndex {
+		t.Fatalf("RouteIndex=%v, want %d", e.RouteIndex, routeIndex)
+	}
+	if e.CaseIndex == nil || *e.CaseIndex != caseIndex {
+		t.Fatalf("CaseIndex=%v, want %d", e.CaseIndex, caseIndex)
+	}
+	if e.RouteMode != "cases" || e.RouteSource != "routes/users.json5" || e.ProxyTarget != "https://example.test" {
+		t.Fatalf("trace fields not copied: %+v", e)
+	}
+}
+
+func TestLogger_CapturesTextRequestAndResponseBody(t *testing.T) {
+	ring := recorder.New(10)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+
+	Logger(io.Discard, LoggerOptions{Quiet: true, CaptureEnabled: true, CaptureMaxBytes: 64}, ring)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		httptest.NewRequest("POST", "/capture", strings.NewReader(`{"name":"alice"}`)),
+	)
+
+	e := ring.Snapshot()[0]
+	if e.Request.Body != `{"name":"alice"}` {
+		t.Fatalf("request body=%q", e.Request.Body)
+	}
+	if e.Response.Body != `{"ok":true}` {
+		t.Fatalf("response body=%q", e.Response.Body)
+	}
+}
+
+func TestLogger_RedactsSensitiveHeaders(t *testing.T) {
+	ring := recorder.New(10)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(204)
+	})
+	req := httptest.NewRequest("GET", "/redact", nil)
+	req.Header.Set("Authorization", "Bearer abc")
+
+	Logger(io.Discard, LoggerOptions{Quiet: true, CaptureEnabled: true, CaptureMaxBytes: 64, RedactKeys: []string{"authorization"}}, ring)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		req,
+	)
+
+	if got := ring.Snapshot()[0].Request.Headers["Authorization"]; got != "***" {
+		t.Fatalf("Authorization header=%q, want ***", got)
+	}
+}
+
+func TestLogger_RedactsSensitiveJSONBody(t *testing.T) {
+	ring := recorder.New(10)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"token":"server-secret","ok":true}`))
+	})
+	req := httptest.NewRequest("POST", "/redact-body", strings.NewReader(`{"password":"abc","name":"alice"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	Logger(io.Discard, LoggerOptions{Quiet: true, CaptureEnabled: true, CaptureMaxBytes: 256, RedactKeys: []string{"password", "token"}}, ring)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		req,
+	)
+
+	e := ring.Snapshot()[0]
+	if strings.Contains(e.Request.Body, "abc") || !strings.Contains(e.Request.Body, `"password":"***"`) {
+		t.Fatalf("request body not redacted: %s", e.Request.Body)
+	}
+	if strings.Contains(e.Response.Body, "server-secret") || !strings.Contains(e.Response.Body, `"token":"***"`) {
+		t.Fatalf("response body not redacted: %s", e.Response.Body)
+	}
+}
+
+func TestLogger_TruncatesBody(t *testing.T) {
+	ring := recorder.New(10)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("hello world"))
+	})
+
+	Logger(io.Discard, LoggerOptions{Quiet: true, CaptureEnabled: true, CaptureMaxBytes: 8}, ring)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		httptest.NewRequest("GET", "/truncate", nil),
+	)
+
+	resp := ring.Snapshot()[0].Response
+	if resp.Body != "hello wo" || !resp.Truncated {
+		t.Fatalf("response capture=%+v, want truncated first 8 bytes", resp)
+	}
+}
+
+func TestLogger_DoesNotRenderBinaryBody(t *testing.T) {
+	ring := recorder.New(10)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write([]byte{0, 1, 2, 3})
+	})
+
+	Logger(io.Discard, LoggerOptions{Quiet: true, CaptureEnabled: true, CaptureMaxBytes: 64}, ring)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		httptest.NewRequest("GET", "/bin", nil),
+	)
+
+	resp := ring.Snapshot()[0].Response
+	if !resp.Binary || resp.Body != "" {
+		t.Fatalf("response capture=%+v, want binary without body", resp)
 	}
 }

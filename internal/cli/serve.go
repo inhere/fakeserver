@@ -23,6 +23,7 @@ import (
 	"github.com/inhere/fakeserver/internal/proxy"
 	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/registry"
+	"github.com/inhere/fakeserver/internal/sizeparse"
 	"github.com/inhere/fakeserver/internal/tpl"
 	"github.com/inhere/fakeserver/internal/webui"
 )
@@ -94,7 +95,7 @@ func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOption
 
 	var mws []func(http.Handler) http.Handler
 	mws = append(mws, middleware.Recoverer)
-	mws = append(mws, middleware.Logger(os.Stderr, opts.Quiet, ring))
+	mws = append(mws, middleware.Logger(os.Stderr, loggerOptionsFromConfig(cfg, opts), ring))
 
 	var maxBody int64
 	if cfg != nil {
@@ -112,6 +113,24 @@ func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOption
 	}
 
 	return middleware.Chain(r, mws...)
+}
+
+func loggerOptionsFromConfig(cfg *config.Config, opts serveOptions) middleware.LoggerOptions {
+	out := middleware.LoggerOptions{Quiet: opts.Quiet}
+	if cfg == nil {
+		return out
+	}
+	out.CaptureEnabled = cfg.Server.Capture.Enabled
+	out.CaptureMaxBytes = 64 << 10
+	if cfg.Server.Capture.MaxBodySize != "" {
+		if n, err := sizeparse.ParseByteSize(cfg.Server.Capture.MaxBodySize); err == nil {
+			out.CaptureMaxBytes = n
+		} else {
+			fmt.Fprintf(os.Stderr, "warn: capture.maxBodySize %q: %v; defaulting to 64KiB\n", cfg.Server.Capture.MaxBodySize, err)
+		}
+	}
+	out.RedactKeys = cfg.Server.Capture.RedactKeys
+	return out
 }
 
 // parseMaxBodySize tolerates empty/invalid values by returning 1MiB default.
