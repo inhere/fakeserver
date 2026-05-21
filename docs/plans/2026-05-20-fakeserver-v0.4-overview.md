@@ -36,7 +36,7 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 |---|---|---|---|---|---|---|
 | **1** | `internal/recorder` 包（环形缓冲 + Append/Snapshot）+ middleware logger 接入 + `webui/api.go` 3 个 JSON 端点（projects/config/history）+ adminEnabled 安全护栏 | `internal/recorder/` + `internal/webui/{mount,api}.go` + middleware/logger 改造 | — | v0.3 | ~500 行 | ✅ 已完成 (commit 64bdf5a..38ff74a) |
 | **2** | SSE 实时推送 `/__fakeserver/events` + recorder.Subscribe 多订阅 + 心跳 15s + 慢客户端非阻塞丢包 | `internal/webui/sse.go` + recorder Subscribe/Unsubscribe | — | Phase 1 | ~300 行 | ✅ 已完成 (commit 7148453..911c54e) |
-| **3** | embed 静态资源 + 4 个 UI 页面（侧栏项目列表 / 路由 / 历史 / 配置）+ 极简 HTML/CSS/JS + 综合 E2E + 文档收尾 | `internal/webui/assets/` + page handlers + v0.4 milestone 闭环 | — | Phase 2 | ~600 行 | ✅ 已完成 (commit 8802f1e..e5ff5ec) |
+| **3** | embed 静态资源 + 4 个 UI 页面（侧栏项目列表 / 路由 / 历史 / 配置）+ 极简 HTML/CSS/JS + 综合 E2E + 文档收尾 | `internal/webui/assets/` + page handlers + v0.4 milestone 闭环 | — | Phase 2 | ~600 行 | ✅ 已完成 (commit 8802f1e..550bd95) |
 
 总计：v0.4 ≈ 1400 行代码（含测试 + 静态资源），分 3 期落地。
 
@@ -253,7 +253,7 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 - Task 2: `a2411ed` (read-only dashboard assets)
 - Task 3: `cf22b1a` (watcher swap 后 emit reload SSE event)
 - Task 4: `ea15ae3` (v0.4 Web UI 集成 E2E)
-- Task 5: `e5ff5ec` (文档收尾 + design §13 + beads issue 关闭)
+- Task 5: `550bd95` (文档收尾 + design §13 + beads issue 关闭)
 
 ---
 
