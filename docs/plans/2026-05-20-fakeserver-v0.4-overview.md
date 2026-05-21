@@ -10,6 +10,7 @@
 |---|---|---|---|
 | 2026-05-20 | v0.4-overview | inhere | 初稿。固化 v0.4 内部的 3 Phase 拆分（内核 + SSE + UI 资源）|
 | 2026-05-21 | v0.4-overview-phase1-applied | inhere | Phase 1 落地：recorder 包 + middleware logger 接入 + webui 3 JSON API + adminEnabled 护栏 |
+| 2026-05-21 | v0.4-overview-phase2-applied | inhere | Phase 2 落地：SSE /events + recorder.Subscribe 多订阅 + 心跳 + EmitReload 接口 |
 
 后续修订：每完成一个 Phase 后在对应行回写 commit 摘要与实际偏差。
 
@@ -33,7 +34,7 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 | Phase | 一句话目标 | 主要新增模块 / 子命令 | 新增第三方依赖 | 前置依赖 | 估计代码量 | 状态 |
 |---|---|---|---|---|---|---|
 | **1** | `internal/recorder` 包（环形缓冲 + Append/Snapshot）+ middleware logger 接入 + `webui/api.go` 3 个 JSON 端点（projects/config/history）+ adminEnabled 安全护栏 | `internal/recorder/` + `internal/webui/{mount,api}.go` + middleware/logger 改造 | — | v0.3 | ~500 行 | ✅ 已完成 (commit 64bdf5a..38ff74a) |
-| **2** | SSE 实时推送 `/__fakeserver/events` + recorder.Subscribe 多订阅 + 心跳 15s + 慢客户端非阻塞丢包 | `internal/webui/sse.go` + recorder Subscribe/Unsubscribe | — | Phase 1 | ~300 行 | 待开始 |
+| **2** | SSE 实时推送 `/__fakeserver/events` + recorder.Subscribe 多订阅 + 心跳 15s + 慢客户端非阻塞丢包 | `internal/webui/sse.go` + recorder Subscribe/Unsubscribe | — | Phase 1 | ~300 行 | ✅ 已完成 (commit 7148453..4527534) |
 | **3** | embed 静态资源 + 4 个 UI 页面（侧栏项目列表 / 路由 / 历史 / 配置）+ 极简 HTML/CSS/JS + 综合 E2E + 文档收尾 | `internal/webui/assets/` + page handlers + v0.4 milestone 闭环 | — | Phase 2 | ~600 行 | 待开始 |
 
 总计：v0.4 ≈ 1400 行代码（含测试 + 静态资源），分 3 期落地。
@@ -169,6 +170,22 @@ design §14 路线图明确 v0.4 范围**仅含 Web UI + 历史 + SSE**——WS/
 6. bd v0.4 Phase 2 epic 创建并关闭
 
 **对 design 章节的映射**：§11.3（`event: request` / `event: reload`）/ §11.5（SSE 心跳 + 慢客户端非阻塞 + 客户端断开自动 unsubscribe）。
+
+**实际落地偏差**：
+
+- **`Event` 判别联合**而非每事件独立 channel：原 plan 设想 `<-chan Entry`，实际改为 `<-chan Event`，其中 `Event{Kind, Entry, Reload}` 让 EventRequest 与 EventReload 共享一条 channel。这样 SSE handler 只需一个 select case 而非多 case 合并；EmitReload 接口对订阅者无侵入。
+- **`broadcast` 持锁期间仅收集 channel 引用，发送在锁外**：避免单个慢订阅者满 channel 时阻塞 subsMu 影响其他订阅者的 Subscribe / Unsubscribe；这是 design §11.5 "慢客户端不阻塞其他客户端" 的精确实现。
+- **SSE 不显式 `WriteHeader(200)`**：rux v2 `responseWriter.ensureWriteHeader` 在 handler 返回时会自动调一次，显式调用触发 `superfluous response.WriteHeader call` 警告。改为第一次 `fmt.Fprint(": ready\n\n")` 触发 implicit 200 + Flush 让客户端立刻收到响应头。
+- **`http.Flusher` rux v2 链路 spike 通过**：Phase 1 风险表 #1 不再是风险——rux 的 `responseWriter` 实现了 `Flush()`（嵌入 ResponseWriter），httptest server 链路下逐帧 flush 工作正常；5 个 SSE 测试包括心跳、断开、reload 事件都 PASS。
+- **client disconnect 用 EventsDropped 增量为 0 间接验证**：goroutine 泄漏检测需要 `runtime.NumGoroutine` 比较，但 httptest server 内部 goroutine 池让该方法不可靠。改为：断开后再 Append 100 次，若订阅者仍在则慢消费会触发 drop；EventsDropped 不增 ⇒ 订阅者已干净 unsubscribe。
+
+**Phase 2 测试覆盖**：12 个新增用例（subscribe 7 + sse 5 + cli e2e 1）；`internal/recorder` **100.0%**（维持，Subscribe/Unsubscribe/EmitReload/broadcast 全测）；`internal/webui` 82.7% (+1.3 vs Phase 1)；`internal/cli` 51.0%（维持）。
+
+**Phase 2 commit 流水**：
+- Task 1: `7148453` (recorder Subscribe + broadcast + EmitReload)
+- Task 2: `cc9070e` (webui SSE handler + 心跳 + 断开自动 unsub)
+- Task 3: `4527534` (cli SSE 集成 E2E)
+- Task 4: 文档收尾（本次 commit）
 
 ---
 

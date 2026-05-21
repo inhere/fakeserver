@@ -21,6 +21,7 @@
 | 2026-05-20 | v0.4-phase0.3.1-applied | inhere | v0.3 Phase 1：registry 包（store/lock/pid）+ serve 启动期 Upsert + PID 写读 |
 | 2026-05-20 | v0.4-phase0.3.2-applied | inhere | v0.3 Phase 2：list/use 子命令 + envs 提取 + 跨进程并发 E2E + v0.3 milestone 闭环 |
 | 2026-05-21 | v0.4-phase0.4.1-applied | inhere | v0.4 Phase 1：recorder 包 + middleware logger 接入 + 3 个 JSON API + adminEnabled 护栏（含 *bool 升级） |
+| 2026-05-21 | v0.4-phase0.4.2-applied | inhere | v0.4 Phase 2：SSE /events + recorder.Subscribe 多订阅 + 心跳 + EmitReload 接口（watcher 接入留 Phase 3） |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1289,6 +1290,12 @@ if seed == 0 {
 1. **recorder 环形缓冲零侵入接入 middleware.Logger**：Logger 加可选 `*recorder.Ring` 参数，nil → 同 v0.3 行为；非 nil → 每个请求 Append 一条 Entry（TS/Method/Path/Status/DurationMs/ClientIP）。RouteIndex/CaseIndex/ProxyTarget 字段结构占位但值待 v1.x mock/proxy 包协作填充。
 2. **webui 包按 adminEnabled 整体挂载，且阻断 echo catch-all 兜底**：cfg.Server.AdminEnabled 升级为 `*bool` 让 `adminEnabled: false` 真正可识别；禁用时 assembleHandler 注册 `/__fakeserver/*path` → 404 阻断 echo 默认 `/*path` 路由——这是 §11.6 "UI 也不可达"的精确实现。config 端点对 env 段做敏感 key 脱敏（token/secret/password 子串 case-insensitive 命中 → "***"）。
 3. **0.0.0.0 + adminEnabled 启动期 WARNING**：design §11.6 安全护栏的"启动时若检测到该组合，打 WARNING 日志"落地；用户希望关闭警告需显式改 host 为 127.0.0.1 或在 fakeserver.json5 写 `adminEnabled: false`。
+
+### 已落地（v0.4 Phase 2 阶段确认）
+
+1. **SSE 端点 `/__fakeserver/events` 实时推送**：Subscribe 返回 `<-chan Event` + cancel；Event 是 `{Kind, Entry, Reload}` 判别联合，让 EventRequest 与 EventReload 共享一条 channel。Logger 中 Append 时 broadcast 给所有订阅者；SSE handler 按 Kind 序列化为 `event: request|reload\ndata: <json>\n\n` 帧。
+2. **慢客户端非阻塞 + EventsDropped 计数**：单订阅者 channel 容量 32；broadcast 持 subsMu 仅收集 channel 引用、发送在锁外；满 channel → 丢弃此事件 + `eventsDropped` atomic 自增——精确实现 §11.5 "慢客户端不阻塞其他客户端"契约。
+3. **心跳 15s + 客户端断开自动 unsubscribe**：SSE handler 用 `time.Ticker` 周期发 `: ping\n\n`（mount.go 注册时 15s，测试注入 80ms 验证）；监听 `c.Req.Context().Done()` → return + defer cancel() 触发订阅者 close。EmitReload 接口已就绪，watcher 端调用接入留 Phase 3。
 
 ### 待评审
 
