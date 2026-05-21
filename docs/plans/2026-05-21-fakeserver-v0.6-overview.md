@@ -203,18 +203,18 @@ logger 在请求进入时创建 `*RequestTrace` 并放入 request context；mock
 
 ### 5.1 Step 1: 写 failing tests
 
-- [ ] 新增 `TestRingAppend_AssignsIncreasingIDs`
+- [x] 新增 `TestRingAppend_AssignsIncreasingIDs`
   - 创建 `ring := recorder.New(3)`。
   - Append 三条无 ID entry。
   - Snapshot 期望 ID 为 1、2、3。
-- [ ] 新增 `TestRingGet_ReturnsEntryByID`
+- [x] 新增 `TestRingGet_ReturnsEntryByID`
   - Append 两条。
   - `ring.Get(1)` 返回第一条。
   - `ring.Get(999)` 返回 `false`。
-- [ ] 新增 `TestRingGet_OverwrittenEntryNotFound`
+- [x] 新增 `TestRingGet_OverwrittenEntryNotFound`
   - 容量 2，Append 三条。
   - ID=1 被覆盖后 `Get(1)` 返回 false。
-- [ ] 新增 `TestRequestTraceContext`
+- [x] 新增 `TestRequestTraceContext`
   - `ctx, trace := recorder.WithRequestTrace(context.Background())`
   - `recorder.SetRouteMatch(ctx, recorder.RequestTrace{...})`
   - 断言 `trace` 被更新。
@@ -231,8 +231,8 @@ Expected:
 
 ### 5.2 Step 2: 扩展 Ring
 
-- [ ] `Ring` 增加 `nextEntryID uint64`。
-- [ ] `Append` 在持锁期间分配 ID：
+- [x] `Ring` 增加 `nextEntryID uint64`。
+- [x] `Append` 在持锁期间分配 ID：
 
 ```go
 if e.ID == 0 {
@@ -241,7 +241,7 @@ if e.ID == 0 {
 }
 ```
 
-- [ ] 新增：
+- [x] 新增：
 
 ```go
 func (r *Ring) Get(id uint64) (Entry, bool)
@@ -251,8 +251,8 @@ func (r *Ring) Get(id uint64) (Entry, bool)
 
 ### 5.3 Step 3: 新增 trace helper
 
-- [ ] 在 `internal/recorder/trace.go` 定义私有 context key。
-- [ ] 提供：
+- [x] 在 `internal/recorder/trace.go` 定义私有 context key。
+- [x] 提供：
 
 ```go
 func WithRequestTrace(ctx context.Context) (context.Context, *RequestTrace)
@@ -1263,8 +1263,8 @@ git status
 
 ## 16. Acceptance Checklist
 
-- [ ] recorder entry 有稳定递增 ID。
-- [ ] `Ring.Get(id)` 可查询未覆盖 history entry。
+- [x] recorder entry 有稳定递增 ID。
+- [x] `Ring.Get(id)` 可查询未覆盖 history entry。
 - [ ] logger 能从 request context 读取 route/case/proxy 命中信息。
 - [ ] mock 单响应 route 写入 `routeMode=mock`、route index、source。
 - [ ] cases route 写入 `routeMode=cases`、route index、case index、source。
