@@ -765,11 +765,11 @@ git commit -m "feat(webui): add route metadata and history detail api"
 
 在 `assets_test.go` 中新增断言 HTML/JS/CSS 包含关键元素：
 
-- [ ] `history-detail-drawer`
-- [ ] `history-detail-body`
-- [ ] `copy-curl-button`
-- [ ] `replay-button`
-- [ ] `route-tester`
+- [x] `history-detail-drawer`
+- [x] `history-detail-body`
+- [x] `copy-curl-button`
+- [x] `replay-button`
+- [x] `route-tester`
 
 Run:
 
@@ -1275,9 +1275,9 @@ git status
 - [x] capture 对二进制 body 不直接展示。
 - [x] `/__fakeserver/routes` 返回 index/source/cases/proxyTarget/params。
 - [x] `/__fakeserver/api/history/{id}` 返回单条详情，支持 400/404。
-- [ ] History 行可打开详情抽屉。
-- [ ] History 详情展示 request/response headers/body 与 route metadata。
-- [ ] Copy as curl 可用，默认脱敏敏感 header。
+- [x] History 行可打开详情抽屉。
+- [x] History 详情展示 request/response headers/body 与 route metadata。
+- [x] Copy as curl 可用，默认脱敏敏感 header。
 - [ ] Replay request 可用，并说明浏览器 forbidden header/body 未捕获限制。
 - [ ] Routes 页面 route tester 可发送 GET/POST 请求。
 - [x] `init --full` 示例启用 capture。
