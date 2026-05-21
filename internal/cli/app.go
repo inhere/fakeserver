@@ -21,6 +21,7 @@ func Run(version string) {
 	app.Add(newServeCmd())
 	app.Add(newInitCmd())
 	app.Add(newCheckCmd())
+	app.Add(newDoctorCmd())
 	app.Add(newRoutesCmd())
 	app.Add(newListCmd())
 	app.Add(newUseCmd())
