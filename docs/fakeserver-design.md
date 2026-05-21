@@ -24,6 +24,7 @@
 | 2026-05-21 | v0.4-phase0.4.2-applied | inhere | v0.4 Phase 2：SSE /events + recorder.Subscribe 多订阅 + 心跳 + EmitReload 接口（watcher 接入留 Phase 3） |
 | 2026-05-21 | v0.4-phase0.4.3-applied | inhere | v0.4 Phase 3：embed 静态 UI + 4 个只读视图 + EventSource 历史追加 + watcher reload SSE 接入 |
 | 2026-05-21 | v0.5-devex-applied | inhere | v0.5：开发体验增强，含 init --full、check --strict、doctor、banner UI/env 信息、运行期错误上下文 |
+| 2026-05-21 | v0.6-debug-console-applied | inhere | v0.6：Web UI 调试台，含 history detail、route metadata、capture、copy curl、replay、route tester |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1310,6 +1311,12 @@ if seed == 0 {
 1. **完整初始化与诊断闭环**：`fakeserver init --full` 生成前端联调示例项目，`fakeserver doctor` 覆盖 config/env/include/bodyFile/port/admin/webui/proxy 风险，`fakeserver check --strict` 在启动前预解析 route/case 的 header/body 模板。
 2. **启动与错误信息更可操作**：banner 显示 Web UI 地址、active env 与 env 文件；mock 运行期错误响应增加 `source`、`field`、`hint`，header key 带横线等常见模板错误会提示 `index .request.headers "User-Agent"` 写法。
 3. **前端使用文档就绪**：新增 `docs/usage/frontend-workflow.md`，固化 init、doctor、strict check、serve、Web UI、history、hot reload、cases 异常态、proxy 联调与常见错误处理流程。
+
+### 已落地（v0.6 Web UI 调试台阶段确认）
+
+1. **recorder detail/capture/trace 闭环**：history entry 增加稳定 ID、route/case/proxy 命中元数据与 request/response capture；logger 通过 request context trace 汇总 handler 写入的命中信息。
+2. **History 调试操作就绪**：新增 history detail API 与 UI 抽屉，展示请求/响应 headers/body、route source、case index、proxy target；支持 Copy as curl 与浏览器同源 Replay。
+3. **Routes tester 与 metadata 就绪**：`/__fakeserver/routes` 输出 index/source/cases/proxyTarget/params，Routes 页面可直接构造 method/path/query/headers/body 并发送测试请求。
 
 ### 待评审
 

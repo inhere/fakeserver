@@ -1281,8 +1281,8 @@ git status
 - [x] Replay request 可用，并说明浏览器 forbidden header/body 未捕获限制。
 - [x] Routes 页面 route tester 可发送 GET/POST 请求。
 - [x] `init --full` 示例启用 capture。
-- [ ] `docs/usage/frontend-workflow.md` 更新 v0.6 用法。
-- [ ] `docs/fakeserver-design.md` 追加 v0.6 落地记录。
-- [ ] `go test ./... -count=1` 通过。
-- [ ] `go vet ./...` 通过。
-- [ ] `go build ./...` 通过。
+- [x] `docs/usage/frontend-workflow.md` 更新 v0.6 用法。
+- [x] `docs/fakeserver-design.md` 追加 v0.6 落地记录。
+- [x] `go test ./... -count=1` 通过。
+- [x] `go vet ./...` 通过。
+- [x] `go build ./...` 通过。

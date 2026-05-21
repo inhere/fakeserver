@@ -61,6 +61,20 @@ UI 可查看：
 - History
 - Config
 
+`init --full` 默认启用 Web UI 调试台所需的受限 capture：
+
+```json5
+server: {
+  capture: {
+    enabled: true,
+    maxBodySize: "64KiB",
+    redactKeys: ["authorization", "cookie", "password", "token", "secret"],
+  },
+}
+```
+
+capture 只用于内存中的请求历史，超过 `maxBodySize` 会截断，二进制 body 不直接展示。命中 `redactKeys` 的 header 或 JSON 字段会显示为 `"***"`。
+
 ## 4. 常用调试
 
 ### 查看请求历史
@@ -70,6 +84,47 @@ UI 可查看：
 ```bash
 curl http://127.0.0.1:5090/__fakeserver/api/history
 ```
+
+点击 History 行可以打开详情抽屉，查看：
+
+- 请求 headers/body
+- 响应 headers/body
+- 命中的 route mode、route index、case index、source file
+- proxy target
+
+详情 API：
+
+```bash
+curl http://127.0.0.1:5090/__fakeserver/api/history/1
+```
+
+### 复制 curl 与重放请求
+
+History 详情里的 Copy curl 会生成同源请求命令，并默认跳过已经脱敏的敏感 header。
+
+Replay 使用浏览器 `fetch` 发起，因此浏览器禁止设置的 header 不会被重放，例如：
+
+- `Host`
+- `Connection`
+- `Content-Length`
+- `Cookie`
+- `Origin`
+- `Referer`
+- `Sec-*`
+
+如果请求 body 没有被 capture，Replay 会不带 body 发送并在结果里提示。
+
+### Routes 页面测试接口
+
+Routes 页面每条 route 有 Test 按钮。测试面板支持：
+
+- method
+- path
+- query，一行一个 `key=value`
+- headers，一行一个 `Key: Value`
+- body，按原文发送
+
+发送后会展示响应 status、headers、body 和耗时，同时 History 会追加一条新记录。
 
 ### 修改配置热加载
 
