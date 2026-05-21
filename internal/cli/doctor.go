@@ -104,17 +104,14 @@ func runDoctor(opts doctorOptions) error {
 		findings = append(findings, doctorFinding{Level: "WARN", Area: "env", Message: "no fakeserver.env.json5 loaded", Fix: "create fakeserver.env.json5 if templates use .env"})
 	}
 
-	includes := len(cfg.SourcePaths)
-	if cfg.EnvSource != "" && includes > 0 {
-		includes--
+	sources := len(cfg.SourcePaths)
+	if cfg.EnvSource != "" && sources > 0 {
+		sources--
 	}
-	if includes > 0 {
-		includes--
+	if sources < 0 {
+		sources = 0
 	}
-	if includes < 0 {
-		includes = 0
-	}
-	findings = append(findings, doctorFinding{Level: "OK", Area: "includes", Message: fmt.Sprintf("%d include file(s)", includes)})
+	findings = append(findings, doctorFinding{Level: "OK", Area: "includes", Message: fmt.Sprintf("%d loaded source file(s)", sources)})
 
 	if cfg.Server.AdminEnabled != nil && *cfg.Server.AdminEnabled {
 		findings = append(findings, doctorFinding{Level: "OK", Area: "webui", Message: "/__fakeserver/ui/ enabled"})

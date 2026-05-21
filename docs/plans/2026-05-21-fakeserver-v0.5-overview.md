@@ -859,14 +859,14 @@ git status
 
 ## 11. Acceptance Checklist
 
-- [ ] `fakeserver init --full` 生成完整示例并可 check。
-- [ ] `fakeserver init --full --force` 可覆盖生成文件。
-- [ ] `fakeserver check --strict` 能发现 body/header 模板语法错误。
-- [ ] strict check 对 header key dash 提供 `index` hint。
-- [ ] `fakeserver doctor` 覆盖 config/env/include/bodyFile/port/proxy/admin/UI。
-- [ ] banner 显示 UI URL、active env、env file。
-- [ ] mock 运行期错误 JSON 包含 source/field/hint。
-- [ ] 新增 `docs/usage/frontend-workflow.md`。
-- [ ] `go test ./... -count=1` 通过。
-- [ ] `go vet ./...` 通过。
-- [ ] `go build ./...` 通过。
+- [x] `fakeserver init --full` 生成完整示例并可 check。
+- [x] `fakeserver init --full --force` 可覆盖生成文件。
+- [x] `fakeserver check --strict` 能发现 body/header 模板语法错误。
+- [x] strict check 对 header key dash 提供 `index` hint。
+- [x] `fakeserver doctor` 覆盖 config/env/include/bodyFile/port/proxy/admin/UI。
+- [x] banner 显示 UI URL、active env、env file。
+- [x] mock 运行期错误 JSON 包含 source/field/hint。
+- [x] 新增 `docs/usage/frontend-workflow.md`。
+- [x] `go test ./... -count=1` 通过。
+- [x] `go vet ./...` 通过。
+- [x] `go build ./...` 通过。
