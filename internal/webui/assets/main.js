@@ -168,6 +168,69 @@
     return parts.join(" ");
   }
 
+  const forbiddenHeaders = [
+    "host",
+    "connection",
+    "content-length",
+    "cookie",
+    "origin",
+    "referer",
+  ];
+
+  function replayableHeaders(headers) {
+    const out = {};
+    const omitted = [];
+    for (const [key, value] of Object.entries(headers || {})) {
+      const lower = key.toLowerCase();
+      if (value === "***" || forbiddenHeaders.includes(lower) || lower.startsWith("sec-")) {
+        omitted.push(key);
+        continue;
+      }
+      out[key] = value;
+    }
+    return { headers: out, omitted };
+  }
+
+  async function readFetchResponse(resp) {
+    const headers = {};
+    resp.headers.forEach((value, key) => { headers[key] = value; });
+    const body = await resp.text();
+    return { status: resp.status, headers, body };
+  }
+
+  async function replayEntry(entry) {
+    if (!entry || (entry.path || "").startsWith("/__fakeserver/")) {
+      return { error: "admin requests are not replayed from the UI" };
+    }
+    const method = entry.method || "GET";
+    const { headers, omitted } = replayableHeaders(entry.request?.headers || {});
+    const init = { method, headers };
+    if (!["GET", "HEAD"].includes(method)) {
+      if (entry.request?.body) {
+        init.body = entry.request.body;
+      } else {
+        omitted.push("body not captured");
+      }
+    }
+    const resp = await fetch(entry.path || "/", init);
+    const result = await readFetchResponse(resp);
+    result.omitted = omitted;
+    return result;
+  }
+
+  async function replaySelectedEntry() {
+    if (!state.selectedEntry) return;
+    const box = $("replay-result");
+    box.hidden = false;
+    box.textContent = "Sending replay...";
+    try {
+      const result = await replayEntry(state.selectedEntry);
+      box.textContent = JSON.stringify(result, null, 2);
+    } catch (err) {
+      box.textContent = String(err.message || err);
+    }
+  }
+
   async function copySelectedCurl() {
     if (!state.selectedEntry) return;
     const text = buildCurl(state.selectedEntry);
@@ -252,6 +315,7 @@
     $("history-detail-drawer").hidden = true;
   });
   $("copy-curl-button").addEventListener("click", copySelectedCurl);
+  $("replay-button").addEventListener("click", replaySelectedEntry);
   onHashChange();
   refreshAll();
   connectEvents();

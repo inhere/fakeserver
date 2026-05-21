@@ -139,6 +139,21 @@ func TestUIAssets_DebugConsoleContracts(t *testing.T) {
 	}
 }
 
+func TestUIAssets_ReplayContracts(t *testing.T) {
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", recorder.New(10))
+
+	js := httptest.NewRecorder()
+	router.ServeHTTP(js, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/main.js", nil))
+	body := js.Body.String()
+	for _, want := range []string{"function replayEntry", "replay-result", "forbiddenHeaders"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("main.js missing %q", want)
+		}
+	}
+}
+
 func TestUIAssets_AdminDisabledNoEndpoints(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(false)}}
