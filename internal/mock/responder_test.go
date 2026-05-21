@@ -60,6 +60,102 @@ func TestRespond_PlainStringBodyInfersTextPlain(t *testing.T) {
 	}
 }
 
+func TestRespond_TemplateErrorIncludesSourceFieldHint(t *testing.T) {
+	r := tpl.NewRenderer(nil, nil, 0)
+	route := &config.Route{
+		Method:     []string{"GET"},
+		Path:       "/bad",
+		SourceFile: "routes/health.json5",
+		Body:       `{{ .request.headers.User-Agent }}`,
+	}
+	ts := newRespondServer(t, "GET", "/bad", route, r)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/bad")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"error", "detail", "route", "source", "field", "hint"} {
+		if got[key] == nil || got[key] == "" {
+			t.Fatalf("error response missing %s: %+v", key, got)
+		}
+	}
+	if got["source"] != "routes/health.json5" {
+		t.Fatalf("source=%v", got["source"])
+	}
+	if got["field"] != "body" {
+		t.Fatalf("field=%v", got["field"])
+	}
+	if !strings.Contains(got["hint"].(string), `index .request.headers "User-Agent"`) {
+		t.Fatalf("hint=%v", got["hint"])
+	}
+}
+
+func TestRespond_HeaderTemplateErrorIncludesField(t *testing.T) {
+	r := tpl.NewRenderer(nil, nil, 0)
+	route := &config.Route{
+		Method:     []string{"GET"},
+		Path:       "/bad-header",
+		SourceFile: "routes/headers.json5",
+		Headers:    map[string]string{"X-Trace-Id": "{{ .unclosed"},
+		Body:       "ok",
+	}
+	ts := newRespondServer(t, "GET", "/bad-header", route, r)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/bad-header")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got["field"] != "headers.X-Trace-Id" {
+		t.Fatalf("field=%v, response=%+v", got["field"], got)
+	}
+	if got["source"] != "routes/headers.json5" {
+		t.Fatalf("source=%v", got["source"])
+	}
+}
+
+func TestRespond_BodyFileErrorIncludesSourceField(t *testing.T) {
+	r := tpl.NewRenderer(nil, nil, 0)
+	route := &config.Route{
+		Method:     []string{"GET"},
+		Path:       "/missing",
+		SourceFile: "routes/files.json5",
+		BodyFile:   "missing.json",
+	}
+	ts := newRespondServer(t, "GET", "/missing", route, r)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got["field"] != "bodyFile" {
+		t.Fatalf("field=%v, response=%+v", got["field"], got)
+	}
+	if got["source"] != "routes/files.json5" {
+		t.Fatalf("source=%v", got["source"])
+	}
+}
+
 func TestRespond_MapBodyInfersJSON(t *testing.T) {
 	r := tpl.NewRenderer(nil, nil, 0)
 	route := &config.Route{Method: []string{"GET"}, Path: "/x", Body: map[string]any{"k": "v"}}

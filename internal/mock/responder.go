@@ -38,7 +38,7 @@ func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer, envMap 
 	// 2. Render headers
 	renderedHeaders, err := renderHeaders(route.Headers, renderer, ctx)
 	if err != nil {
-		writeError(c.Resp, http.StatusInternalServerError, "template error (headers)", err.Error(), route)
+		writeErrorWithContext(c.Resp, http.StatusInternalServerError, "template error (headers)", err.Error(), route, errField(err), tpl.TemplateHint(errSource(err), err))
 		return
 	}
 
@@ -55,7 +55,7 @@ func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer, envMap 
 		path := resolveBodyFile(route.BodyFile, route.SourceFile)
 		b, ferr := os.ReadFile(path)
 		if ferr != nil {
-			writeError(c.Resp, http.StatusInternalServerError, "bodyFile error", ferr.Error(), route)
+			writeErrorWithContext(c.Resp, http.StatusInternalServerError, "bodyFile error", ferr.Error(), route, "bodyFile", "")
 			return
 		}
 		bodyBytes = b
@@ -65,7 +65,7 @@ func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer, envMap 
 	} else if route.Body != nil {
 		rendered, rerr := renderBody(route.Body, renderer, ctx)
 		if rerr != nil {
-			writeError(c.Resp, http.StatusInternalServerError, "template error (body)", rerr.Error(), route)
+			writeErrorWithContext(c.Resp, http.StatusInternalServerError, "template error (body)", rerr.Error(), route, "body", tpl.TemplateHint(errSource(rerr), rerr))
 			return
 		}
 		bodyForCT = rendered
@@ -75,7 +75,7 @@ func Respond(c *rux.Context, route *config.Route, renderer tpl.Renderer, envMap 
 		default:
 			b, jerr := json.Marshal(v)
 			if jerr != nil {
-				writeError(c.Resp, http.StatusInternalServerError, "json marshal error", jerr.Error(), route)
+				writeErrorWithContext(c.Resp, http.StatusInternalServerError, "json marshal error", jerr.Error(), route, "body", "")
 				return
 			}
 			bodyBytes = b
@@ -117,7 +117,7 @@ func renderHeaders(hdrs map[string]string, r tpl.Renderer, ctx map[string]any) (
 	for k, v := range hdrs {
 		rendered, err := r.Render(v, ctx)
 		if err != nil {
-			return nil, fmt.Errorf("header %q: %w", k, err)
+			return nil, renderFieldError{field: "headers." + k, source: v, err: fmt.Errorf("header %q: %w", k, err)}
 		}
 		out[k] = rendered
 	}
@@ -131,7 +131,11 @@ func renderHeaders(hdrs map[string]string, r tpl.Renderer, ctx map[string]any) (
 func renderBody(body any, r tpl.Renderer, ctx map[string]any) (any, error) {
 	switch v := body.(type) {
 	case string:
-		return r.Render(v, ctx)
+		rendered, err := r.Render(v, ctx)
+		if err != nil {
+			return nil, renderFieldError{source: v, err: err}
+		}
+		return rendered, nil
 	case map[string]any:
 		out := make(map[string]any, len(v))
 		for k, child := range v {
@@ -224,11 +228,48 @@ func paramsFromContext(c *rux.Context) map[string]string {
 
 // writeError emits a uniform 500 error response per design §6.
 func writeError(w http.ResponseWriter, status int, short, detail string, route *config.Route) {
+	writeErrorWithContext(w, status, short, detail, route, "", "")
+}
+
+func writeErrorWithContext(w http.ResponseWriter, status int, short, detail string, route *config.Route, field, hint string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	out := map[string]any{
 		"error":  short,
 		"detail": detail,
 		"route":  fmt.Sprintf("%s %s", strings.Join(route.Method, ","), route.Path),
-	})
+	}
+	if route.SourceFile != "" {
+		out["source"] = route.SourceFile
+	}
+	if field != "" {
+		out["field"] = field
+	}
+	if hint != "" {
+		out["hint"] = hint
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+type renderFieldError struct {
+	field  string
+	source string
+	err    error
+}
+
+func (e renderFieldError) Error() string { return e.err.Error() }
+func (e renderFieldError) Unwrap() error { return e.err }
+
+func errField(err error) string {
+	if e, ok := err.(renderFieldError); ok {
+		return e.field
+	}
+	return ""
+}
+
+func errSource(err error) string {
+	if e, ok := err.(renderFieldError); ok {
+		return e.source
+	}
+	return ""
 }

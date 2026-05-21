@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"text/template"
 
@@ -63,7 +62,7 @@ func StrictValidate(cfg *Config) []error {
 				p := base
 				p.Field = "headers." + k
 				p.Message = err.Error()
-				p.Hint = TemplateHint(v, err)
+				p.Hint = tpl.TemplateHint(v, err)
 				errs = append(errs, p)
 			}
 		}
@@ -72,7 +71,7 @@ func StrictValidate(cfg *Config) []error {
 				p := base
 				p.Field = field
 				p.Message = err.Error()
-				p.Hint = TemplateHint(src, err)
+				p.Hint = tpl.TemplateHint(src, err)
 				errs = append(errs, p)
 			}
 		})
@@ -83,7 +82,7 @@ func StrictValidate(cfg *Config) []error {
 					p.CaseIndex = ci
 					p.Field = fmt.Sprintf("cases[%d].headers.%s", ci, k)
 					p.Message = err.Error()
-					p.Hint = TemplateHint(v, err)
+					p.Hint = tpl.TemplateHint(v, err)
 					errs = append(errs, p)
 				}
 			}
@@ -93,7 +92,7 @@ func StrictValidate(cfg *Config) []error {
 					p.CaseIndex = ci
 					p.Field = field
 					p.Message = err.Error()
-					p.Hint = TemplateHint(src, err)
+					p.Hint = tpl.TemplateHint(src, err)
 					errs = append(errs, p)
 				}
 			})
@@ -125,25 +124,4 @@ func walkTemplateStrings(field string, node any, visit func(field string, src st
 			walkTemplateStrings(fmt.Sprintf("%s[%d]", field, i), child, visit)
 		}
 	}
-}
-
-var dashedHeaderAccessRE = regexp.MustCompile(`\.request\.headers\.([A-Za-z][A-Za-z0-9]*-[A-Za-z0-9-]+)`)
-
-// TemplateHint returns a concise fix suggestion for common template authoring
-// mistakes. It is exported so runtime mock errors can reuse the same hints.
-func TemplateHint(src string, err error) string {
-	if m := dashedHeaderAccessRE.FindStringSubmatch(src); len(m) == 2 {
-		return fmt.Sprintf(`use {{ index .request.headers "%s" }}`, m[1])
-	}
-	if err == nil {
-		return ""
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "function") && strings.Contains(msg, "not defined") {
-		return "check function name or docs/fakeserver-design.md template functions"
-	}
-	if strings.Contains(msg, "unexpected EOF") || strings.Contains(msg, "unclosed") {
-		return "check closing braces: {{ ... }}"
-	}
-	return ""
 }
