@@ -177,6 +177,18 @@ func (r *Ring) Subscribe() (<-chan Event, func()) {
 	return ch, cancel
 }
 
+// CloseSubscribers closes every active subscription channel.
+// This is used during HTTP graceful shutdown so long-lived SSE handlers can
+// return promptly instead of waiting for their client connection to close.
+func (r *Ring) CloseSubscribers() {
+	r.subsMu.Lock()
+	defer r.subsMu.Unlock()
+	for id, ch := range r.subscribers {
+		delete(r.subscribers, id)
+		close(ch)
+	}
+}
+
 // EventsDropped 返回因订阅者 channel 满而被丢弃的事件总数（design §11.5 "events.dropped"）。
 func (r *Ring) EventsDropped() uint64 {
 	return atomic.LoadUint64(&r.eventsDropped)

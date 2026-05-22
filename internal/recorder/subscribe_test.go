@@ -66,6 +66,27 @@ func TestUnsubscribe_StopsDelivery(t *testing.T) {
 	}
 }
 
+func TestCloseSubscribers_ClosesActiveSubscriptions(t *testing.T) {
+	r := New(10)
+	events, cancel := r.Subscribe()
+	defer cancel()
+
+	r.CloseSubscribers()
+	r.Append(Entry{Path: "/after-close", Status: 200})
+
+	select {
+	case _, ok := <-events:
+		if ok {
+			t.Fatal("subscriber channel should be closed")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("subscriber channel should close within 200ms")
+	}
+	if got := r.Snapshot(); len(got) != 1 || got[0].Path != "/after-close" {
+		t.Fatalf("ring should keep accepting entries after CloseSubscribers: %+v", got)
+	}
+}
+
 func TestSubscribe_SlowSubscriberDoesNotBlockOthers(t *testing.T) {
 	r := New(10)
 

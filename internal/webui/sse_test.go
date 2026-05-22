@@ -184,3 +184,47 @@ func TestSSE_ClientDisconnect_UnsubscribesCleanly(t *testing.T) {
 		t.Error("ring should still accept Append after subscriber disconnect")
 	}
 }
+
+func TestSSE_CloseSubscribersEndsStream(t *testing.T) {
+	ring := recorder.New(10)
+	srv := newSSETestServer(t, ring, time.Hour)
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/__fakeserver/events", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	reader := bufio.NewReader(resp.Body)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read ready line: %v", err)
+	}
+	if strings.TrimSpace(line) != ": ready" {
+		t.Fatalf("ready line = %q", line)
+	}
+	if line, err := reader.ReadString('\n'); err != nil || strings.TrimSpace(line) != "" {
+		t.Fatalf("ready frame terminator line=%q err=%v", line, err)
+	}
+
+	ring.CloseSubscribers()
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := reader.ReadString('\n')
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("expected SSE body read to end after CloseSubscribers")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("SSE stream did not end after CloseSubscribers")
+	}
+}
