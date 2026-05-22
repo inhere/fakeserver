@@ -799,7 +799,7 @@ git commit -m "feat(recorder): record scenario metadata"
 - Modify: `internal/mock/router.go`
 - Modify: `internal/mock/cases_test.go`
 
-- [ ] **Step 4.1: 写 selector helper tests**
+- [x] **Step 4.1: 写 selector helper tests**
 
 在 `internal/mock/selector_test.go` 增加：
 
@@ -821,7 +821,7 @@ func TestPickCaseByName(t *testing.T) {
 
 需要给 `selector_test.go` 添加 `github.com/inhere/fakeserver/internal/config` import。
 
-- [ ] **Step 4.2: 实现 pickCaseByName**
+- [x] **Step 4.2: 实现 pickCaseByName**
 
 在 `internal/mock/selector.go` 增加：
 
@@ -841,7 +841,7 @@ func pickCaseByName(cases []config.RouteCase, name string) (int, bool) {
 
 同时给文件添加 config import。
 
-- [ ] **Step 4.3: 写 cases behavior tests**
+- [x] **Step 4.3: 写 cases behavior tests**
 
 在 `internal/mock/cases_test.go` 增加三类用例：
 
@@ -907,7 +907,7 @@ go test ./internal/mock -run 'TestRespondCases_.*Scenario|TestRespondCases_.*Ove
 
 Expected: 编译失败，因为 `RespondCasesWithScenario` 不存在。
 
-- [ ] **Step 4.4: 增加 scenario-aware cases 入口**
+- [x] **Step 4.4: 增加 scenario-aware cases 入口**
 
 在 `internal/mock/cases.go` 保留现有 `RespondCases` 作为兼容入口，并新增：
 
@@ -974,7 +974,7 @@ recorder.SetRouteMatch(c.Req.Context(), recorder.RequestTrace{
 
 fallback selector 路径的 `OverrideSource` 使用 `"strategy"`，`CaseName` 使用 chosen case name，scenarioName 若有仍写入 trace。
 
-- [ ] **Step 4.5: router.Mount 传入 runtime 依赖**
+- [x] **Step 4.5: router.Mount 传入 runtime 依赖**
 
 为了不破坏所有调用点，新增：
 
@@ -997,7 +997,7 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 
 `MountWithRuntime` 在 cases handler 中调用 `RespondCasesWithScenario`。
 
-- [ ] **Step 4.6: 验证并提交**
+- [x] **Step 4.6: 验证并提交**
 
 Run:
 
@@ -1020,7 +1020,7 @@ git commit -m "feat(mock): select cases by scenario"
 - Modify: `internal/cli/serve.go`
 - Modify: `internal/cli/serve_test.go`
 
-- [ ] **Step 5.1: 写 failing CLI tests**
+- [x] **Step 5.1: 写 failing CLI tests**
 
 在 `internal/cli/serve_test.go` 增加：
 
@@ -1064,7 +1064,7 @@ go test ./internal/cli -run TestAssembleHandler_UsesCLIScenario -count=1
 
 Expected: 编译失败，因为 `serveOptions.Scenario` 和 assembleHandler 签名不存在。
 
-- [ ] **Step 5.2: serveOptions 增加 Scenario**
+- [x] **Step 5.2: serveOptions 增加 Scenario**
 
 修改 `internal/cli/serve.go`：
 
@@ -1088,7 +1088,7 @@ type serveOptions struct {
 cmd.StrOpt2(&opts.Scenario, "scenario", "Default scenario name for this serve process")
 ```
 
-- [ ] **Step 5.3: assembleHandler 接收 store**
+- [x] **Step 5.3: assembleHandler 接收 store**
 
 修改签名：
 
@@ -1107,7 +1107,7 @@ _ = mock.MountWithRuntime(r, cfg, renderer, mock.RuntimeOptions{
 
 所有现有 `assembleHandler(...)` 调用点补最后一个参数 `nil`，需要 scenario 的调用传入 store。
 
-- [ ] **Step 5.4: runServe 创建并复用 store**
+- [x] **Step 5.4: runServe 创建并复用 store**
 
 在 `runServe` 中创建：
 
@@ -1117,7 +1117,7 @@ scenarioStore := scenario.NewStore()
 
 首次 assemble 和 hot reload re-assemble 都传同一个 `scenarioStore`，确保 UI runtime 状态热加载后保留。
 
-- [ ] **Step 5.5: 验证并提交**
+- [x] **Step 5.5: 验证并提交**
 
 Run:
 
@@ -1143,7 +1143,7 @@ git commit -m "feat(cli): wire scenario selection into serve"
 - Modify: `internal/webui/mount.go`
 - Modify: `internal/webui/api_test.go`
 
-- [ ] **Step 6.1: routes metadata failing test**
+- [x] **Step 6.1: routes metadata failing test**
 
 在 `internal/admin/handlers_test.go` 增加或扩展：
 
@@ -1176,7 +1176,7 @@ func TestRoutesHandler_IncludesCaseNamesAndScenarioCases(t *testing.T) {
 }
 ```
 
-- [ ] **Step 6.2: 实现 routes metadata**
+- [x] **Step 6.2: 实现 routes metadata**
 
 `routesHandler` 的 case item 增加：
 
@@ -1199,7 +1199,7 @@ if len(scenarioCases) > 0 {
 }
 ```
 
-- [ ] **Step 6.3: Web UI API failing tests**
+- [x] **Step 6.3: Web UI API failing tests**
 
 在 `internal/webui/api_test.go` 增加：
 
@@ -1247,7 +1247,7 @@ func testAdminCfg() *config.Config {
 }
 ```
 
-- [ ] **Step 6.4: 实现 API**
+- [x] **Step 6.4: 实现 API**
 
 修改 `webui.Mount` 签名：
 
@@ -1287,13 +1287,13 @@ type overrideRequest struct {
 - invalid JSON 返回 400。
 - override mode 仅允许 `always|next|count`，否则 400。
 
-- [ ] **Step 6.5: 调整 assembleHandler 调用**
+- [x] **Step 6.5: 调整 assembleHandler 调用**
 
 `cli.assembleHandler` 调用 `webui.Mount` 时传入同一个 `scenarioStore`。
 
 所有测试调用补参数。
 
-- [ ] **Step 6.6: 验证并提交**
+- [x] **Step 6.6: 验证并提交**
 
 Run:
 
