@@ -413,7 +413,7 @@ git commit -m "feat(config): add scenarios schema"
 - Create: `internal/scenario/resolve.go`
 - Create: `internal/scenario/resolve_test.go`
 
-- [ ] **Step 2.1: 写 store failing tests**
+- [x] **Step 2.1: 写 store failing tests**
 
 创建 `internal/scenario/store_test.go`：
 
@@ -476,7 +476,7 @@ go test ./internal/scenario -run TestStore -count=1
 
 Expected: package 不存在。
 
-- [ ] **Step 2.2: 实现 store**
+- [x] **Step 2.2: 实现 store**
 
 创建 `internal/scenario/store.go`：
 
@@ -593,7 +593,7 @@ func (s *Store) Snapshot() State {
 }
 ```
 
-- [ ] **Step 2.3: 写 resolver failing tests**
+- [x] **Step 2.3: 写 resolver failing tests**
 
 创建 `internal/scenario/resolve_test.go`：
 
@@ -638,7 +638,7 @@ func TestResolveScenarioPriority(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2.4: 实现 resolver**
+- [x] **Step 2.4: 实现 resolver**
 
 创建 `internal/scenario/resolve.go`：
 
@@ -675,7 +675,7 @@ func Resolve(req *http.Request, store *Store, cfg *config.Config, cliScenario st
 }
 ```
 
-- [ ] **Step 2.5: 验证并提交**
+- [x] **Step 2.5: 验证并提交**
 
 Run:
 
