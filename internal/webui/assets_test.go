@@ -176,6 +176,16 @@ func TestUIAssets_RouteTesterContracts(t *testing.T) {
 			t.Fatalf("index missing %q", want)
 		}
 	}
+	body := index.Body.String()
+	routesIdx := strings.Index(body, `id="view-routes"`)
+	testerIdx := strings.Index(body, `id="route-tester"`)
+	historyIdx := strings.Index(body, `id="view-history"`)
+	if routesIdx < 0 || testerIdx < 0 || historyIdx < 0 {
+		t.Fatalf("index missing route tester landmarks")
+	}
+	if !(routesIdx < testerIdx && testerIdx < historyIdx) {
+		t.Fatalf("route tester must be inside Routes view before History view")
+	}
 }
 
 func readAsset(t *testing.T, name string) string {
