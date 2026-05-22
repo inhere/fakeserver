@@ -58,13 +58,24 @@ func TestWithLock_HighContention_DoesNotBlock(t *testing.T) {
 	lockPath := filepath.Join(d, "lock")
 
 	const N = 30
+	var (
+		inside int32
+		maxIn  int32
+	)
 	var wg sync.WaitGroup
 	wg.Add(N)
-	start := time.Now()
 	for i := 0; i < N; i++ {
 		go func() {
 			defer wg.Done()
 			err := WithLock(lockPath, func() error {
+				cur := atomic.AddInt32(&inside, 1)
+				defer atomic.AddInt32(&inside, -1)
+				for {
+					m := atomic.LoadInt32(&maxIn)
+					if cur <= m || atomic.CompareAndSwapInt32(&maxIn, m, cur) {
+						break
+					}
+				}
 				time.Sleep(50 * time.Millisecond) // 故意超出 5 次退避总预算
 				return nil
 			})
@@ -74,9 +85,8 @@ func TestWithLock_HighContention_DoesNotBlock(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	// 30 个串行执行 50ms 临界区 = 1500ms；fallback 放行下应远短于此
-	if time.Since(start) > 1200*time.Millisecond {
-		t.Errorf("high-contention WithLock took %v, fallback should not serialize", time.Since(start))
+	if maxIn <= 1 {
+		t.Errorf("max concurrent inside high-contention lock = %d, want > 1 (fallback should not serialize)", maxIn)
 	}
 }
 
