@@ -233,7 +233,7 @@ type RequestTrace struct {
 - Modify: `internal/config/schema_test.go`
 - Modify: `internal/config/validate_test.go`
 
-- [ ] **Step 1.1: 写 failing schema tests**
+- [x] **Step 1.1: 写 failing schema tests**
 
 在 `internal/config/schema_test.go` 增加：
 
@@ -259,7 +259,7 @@ go test ./internal/config -run TestApplyDefaults_ScenarioDefaults -count=1
 
 Expected: 编译失败，提示 `ServerOpts.Scenario` 或 `Config.Scenarios` 不存在。
 
-- [ ] **Step 1.2: 写 failing validate tests**
+- [x] **Step 1.2: 写 failing validate tests**
 
 在 `internal/config/validate_test.go` 增加：
 
@@ -339,7 +339,7 @@ go test ./internal/config -run 'TestValidate_(CaseNames|Scenario)' -count=1
 
 Expected: 编译失败或测试失败。
 
-- [ ] **Step 1.3: 扩展 schema**
+- [x] **Step 1.3: 扩展 schema**
 
 按 §3.1 修改 `internal/config/schema.go`：
 
@@ -348,7 +348,7 @@ Expected: 编译失败或测试失败。
 - 新增 `ScenarioConfig`。
 - `RouteCase` 增加 `Name string`。
 
-- [ ] **Step 1.4: defaults 初始化 scenarios**
+- [x] **Step 1.4: defaults 初始化 scenarios**
 
 在 `internal/config/defaults.go` 的 `applyDefaults` 中确保：
 
@@ -363,7 +363,7 @@ if cfg.Scenarios == nil {
 
 不要默认启用任何 scenario。
 
-- [ ] **Step 1.5: validate scenario 引用**
+- [x] **Step 1.5: validate scenario 引用**
 
 在 `internal/config/validate.go` 增加 helper：
 
@@ -388,7 +388,7 @@ routes[0] GET /api/users: case name "empty" duplicated
 server.scenario "missing" does not exist in scenarios
 ```
 
-- [ ] **Step 1.6: 验证并提交**
+- [x] **Step 1.6: 验证并提交**
 
 Run:
 
@@ -700,7 +700,7 @@ git commit -m "feat(scenario): add runtime store"
 - Modify: `internal/recorder/trace_test.go`
 - Modify: `internal/middleware/logger_test.go`
 
-- [ ] **Step 3.1: 写 failing trace test**
+- [x] **Step 3.1: 写 failing trace test**
 
 在 `internal/recorder/trace_test.go` 增加：
 
@@ -732,7 +732,7 @@ go test ./internal/recorder -run TestRequestTraceScenarioFields -count=1
 
 Expected: 编译失败。
 
-- [ ] **Step 3.2: 扩展 recorder.Entry 与 RequestTrace**
+- [x] **Step 3.2: 扩展 recorder.Entry 与 RequestTrace**
 
 在 `internal/recorder/recorder.go` 的 `Entry` 中增加：
 
@@ -744,7 +744,7 @@ OverrideSource string `json:"overrideSource,omitempty"`
 
 在 `internal/recorder/trace.go` 的 `RequestTrace` 中增加同名字段，并让 `SetRouteMatch` 在非空时覆盖。
 
-- [ ] **Step 3.3: 补 logger 集成测试**
+- [x] **Step 3.3: 补 logger 集成测试**
 
 在 `internal/middleware/logger_test.go` 增加一个最小集成用例：
 
@@ -774,7 +774,7 @@ func TestLogger_AppendsScenarioTraceFields(t *testing.T) {
 
 需要确认该文件已有 `io`、`net/http`、`net/http/httptest`、`recorder` import；缺少则补齐。
 
-- [ ] **Step 3.4: 验证并提交**
+- [x] **Step 3.4: 验证并提交**
 
 Run:
 
