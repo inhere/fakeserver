@@ -135,6 +135,27 @@ func TestRunInitFull_IncludesCaptureConfig(t *testing.T) {
 	}
 }
 
+func TestRunInitFull_IncludesScenarios(t *testing.T) {
+	tmp := t.TempDir()
+	opts := initOptions{cwd: tmp, full: true}
+	if err := runInit(opts); err != nil {
+		t.Fatalf("runInit full: %v", err)
+	}
+	cfg, err := config.Load([]string{filepath.Join(tmp, "fakeserver.json5")}, "dev", nil)
+	if err != nil {
+		t.Fatalf("load full config: %v", err)
+	}
+	if len(cfg.Scenarios) == 0 {
+		t.Fatalf("full init should include scenarios")
+	}
+	if _, ok := cfg.Scenarios["emptyUsers"]; !ok {
+		t.Fatalf("full init should include emptyUsers scenario: %#v", cfg.Scenarios)
+	}
+	if errs := config.Validate(cfg); len(errs) > 0 {
+		t.Fatalf("full config should validate: %v", errs)
+	}
+}
+
 func TestRunInitFull_RefusesOverwriteByDefault(t *testing.T) {
 	tmpDir := t.TempDir()
 	target := filepath.Join(tmpDir, "fakeserver.json5")

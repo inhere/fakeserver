@@ -54,6 +54,19 @@ const fullConfigTemplate = `{
     apiVersion: "v1",
   },
 
+  scenarios: {
+    emptyUsers: {
+      routes: {
+        "GET /api/users": "empty",
+      },
+    },
+    serverErrors: {
+      routes: {
+        "GET /api/users": "server-error",
+      },
+    },
+  },
+
   routes: [
     "@.fakeserver/routes/health.json5",
     "@.fakeserver/routes/users.json5",
@@ -135,21 +148,45 @@ const fullUsersRoutesTemplate = `[
   {
     method: "GET",
     path: "/api/users",
+    strategy: "first-match",
     delay: "30ms",
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "X-Total-Count": "3",
       "X-Request-Id": "{{ .env.requestPrefix }}-{{ shortid }}",
     },
-    body: {
-      page: "{{ default \"1\" .request.query.page }}",
-      keyword: "{{ default \"\" .request.query.q }}",
-      items: [
-        { id: "u-1001", name: "{{ fakeName }}", email: "{{ fakeEmail }}", role: "admin", city: "{{ fakeCity }}", active: true },
-        { id: "u-1002", name: "{{ fakeName }}", email: "{{ fakeEmail }}", role: "editor", city: "{{ fakeCity }}", active: true },
-        { id: "u-1003", name: "{{ fakeName }}", email: "{{ fakeEmail }}", role: "viewer", city: "{{ fakeCity }}", active: false },
-      ],
-    },
+    cases: [
+      {
+        name: "empty",
+        when: "request.query.empty == \"1\"",
+        status: 200,
+        body: {
+          page: "{{ default \"1\" .request.query.page }}",
+          keyword: "{{ default \"\" .request.query.q }}",
+          items: [],
+        },
+      },
+      {
+        name: "server-error",
+        when: "request.query.fail == \"1\"",
+        status: 500,
+        delay: "120ms",
+        body: { error: "simulated_failure", message: "query fail=1 forces a 500 response" },
+      },
+      {
+        name: "success",
+        status: 200,
+        body: {
+          page: "{{ default \"1\" .request.query.page }}",
+          keyword: "{{ default \"\" .request.query.q }}",
+          items: [
+            { id: "u-1001", name: "{{ fakeName }}", email: "{{ fakeEmail }}", role: "admin", city: "{{ fakeCity }}", active: true },
+            { id: "u-1002", name: "{{ fakeName }}", email: "{{ fakeEmail }}", role: "editor", city: "{{ fakeCity }}", active: true },
+            { id: "u-1003", name: "{{ fakeName }}", email: "{{ fakeEmail }}", role: "viewer", city: "{{ fakeCity }}", active: false },
+          ],
+        },
+      },
+    ],
   },
   {
     method: "GET",
@@ -176,12 +213,14 @@ const fullUsersRoutesTemplate = `[
     strategy: "first-match",
     cases: [
       {
+        name: "validation-error",
         when: "request.body.name == \"\"",
         status: 400,
         headers: { "Content-Type": "application/json; charset=utf-8" },
         body: { error: "validation_failed", message: "name is required" },
       },
       {
+        name: "server-error",
         when: "request.query.fail == \"1\"",
         status: 500,
         delay: "120ms",
@@ -189,6 +228,7 @@ const fullUsersRoutesTemplate = `[
         body: { error: "simulated_failure", message: "query fail=1 forces a 500 response" },
       },
       {
+        name: "created",
         status: 201,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
@@ -213,6 +253,7 @@ const fullOrdersRoutesTemplate = `[
     strategy: "weighted",
     cases: [
       {
+        name: "success",
         weight: 8,
         status: 200,
         headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -225,6 +266,7 @@ const fullOrdersRoutesTemplate = `[
         },
       },
       {
+        name: "temporary-unavailable",
         weight: 2,
         status: 503,
         delay: "200ms",
@@ -258,18 +300,21 @@ const fullAuthRoutesTemplate = `[
     strategy: "first-match",
     cases: [
       {
+        name: "locked",
         when: "request.body.username == \"locked\"",
         status: 423,
         headers: { "Content-Type": "application/json; charset=utf-8" },
         body: { error: "account_locked", message: "This demo account is locked." },
       },
       {
+        name: "unauthorized",
         when: "request.body.password == \"bad\"",
         status: 401,
         headers: { "Content-Type": "application/json; charset=utf-8" },
         body: { error: "invalid_credentials", message: "Use any password except 'bad'." },
       },
       {
+        name: "success",
         status: 200,
         headers: { "Content-Type": "application/json; charset=utf-8" },
         body: {
