@@ -52,7 +52,7 @@ func RespondCasesWithScenario(
 	cliScenario string,
 ) {
 	scenarioName, scenarioSource := scenario.Resolve(c.Req, scenarioStore, cfg, cliScenario)
-	routeKey := scenario.NewRouteKey(firstMethod(route), route.Path)
+	routeKey := scenario.NewRouteKey(c.Req.Method, route.Path)
 	recordRouteTrace(c, route, routeIndex, "cases", nil)
 
 	if scenarioStore != nil {
@@ -116,13 +116,6 @@ func respondPickedCase(c *rux.Context, route *config.Route, routeIndex int, case
 	})
 	virtual := caseAsRoute(route, chosen)
 	respondWithTrace(c, virtual, routeIndex, "cases", &caseIndex, renderer, envMap)
-}
-
-func firstMethod(route *config.Route) string {
-	if route == nil || len(route.Method) == 0 {
-		return ""
-	}
-	return route.Method[0]
 }
 
 // caseAsRoute composes a virtual single-response Route by overlaying the

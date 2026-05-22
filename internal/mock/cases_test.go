@@ -171,6 +171,64 @@ func TestRespondCases_OverrideNextBeatsScenarioAndConsumes(t *testing.T) {
 	}
 }
 
+func TestRespondCases_MultiMethodUsesActualRequestMethodForScenario(t *testing.T) {
+	route := &config.Route{
+		Method:   []string{"GET", "POST"},
+		Path:     "/api/users",
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{Name: "success", Status: 200, Body: map[string]any{"state": "success"}},
+			{Name: "created", Status: 201, Body: map[string]any{"state": "created"}},
+		},
+	}
+	cfg := &config.Config{
+		Server: config.ServerOpts{Scenario: "createUser"},
+		Scenarios: map[string]config.ScenarioConfig{
+			"createUser": {Routes: map[string]string{"POST /api/users": "created"}},
+		},
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/users", nil)
+	ctx, trace := recorder.WithRequestTrace(req.Context())
+	req = req.WithContext(ctx)
+
+	RespondCasesWithScenario(&rux.Context{Req: req, Resp: rec}, cfg, route, 0, []*Matcher{mustMatcher(t, ""), mustMatcher(t, "")}, NewSelector("first-match"), tpl.NewRenderer(nil, nil, 0), nil, nil, "")
+
+	if rec.Code != 201 || !strings.Contains(rec.Body.String(), `"state":"created"`) {
+		t.Fatalf("POST scenario response code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if trace.CaseName != "created" || trace.OverrideSource != "config" {
+		t.Fatalf("trace = %#v", trace)
+	}
+}
+
+func TestRespondCases_MultiMethodUsesActualRequestMethodForOverride(t *testing.T) {
+	route := &config.Route{
+		Method:   []string{"GET", "POST"},
+		Path:     "/api/users",
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{Name: "success", Status: 200, Body: map[string]any{"state": "success"}},
+			{Name: "created", Status: 201, Body: map[string]any{"state": "created"}},
+		},
+	}
+	store := scenario.NewStore()
+	store.SetOverride(scenario.NewRouteKey("POST", "/api/users"), scenario.Override{CaseName: "created", Mode: "always"})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/users", nil)
+	ctx, trace := recorder.WithRequestTrace(req.Context())
+	req = req.WithContext(ctx)
+
+	RespondCasesWithScenario(&rux.Context{Req: req, Resp: rec}, &config.Config{}, route, 0, []*Matcher{mustMatcher(t, ""), mustMatcher(t, "")}, NewSelector("first-match"), tpl.NewRenderer(nil, nil, 0), nil, store, "")
+
+	if rec.Code != 201 || !strings.Contains(rec.Body.String(), `"state":"created"`) {
+		t.Fatalf("POST override response code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if trace.CaseName != "created" || trace.OverrideSource != "override:always" {
+		t.Fatalf("trace = %#v", trace)
+	}
+}
+
 func TestRespondCases_SetsCaseTrace(t *testing.T) {
 	route := &config.Route{
 		Method:     []string{"GET"},
