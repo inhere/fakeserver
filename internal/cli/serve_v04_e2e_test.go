@@ -34,7 +34,7 @@ func TestServe_v04_WebUIAPIs(t *testing.T) {
 	ring := recorder.New(50)
 
 	holder := middleware.NewHolder()
-	holder.Swap(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, ring))
+	holder.Swap(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, ring, nil))
 	srv := httptest.NewServer(holder)
 	defer srv.Close()
 
@@ -117,7 +117,7 @@ func TestServe_v04_SSE_EventsEndpoint(t *testing.T) {
 	rdr := tpl.NewRenderer(cfg.Globals, cfg.Server.OSEnvWhitelist, cfg.Server.FakerSeed)
 	ring := recorder.New(50)
 	holder := middleware.NewHolder()
-	holder.Swap(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, ring))
+	holder.Swap(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, ring, nil))
 	srv := httptest.NewServer(holder)
 	defer srv.Close()
 
@@ -167,7 +167,7 @@ func TestServe_v04_AdminDisabled_NoUIEndpoints(t *testing.T) {
 	rdr := tpl.NewRenderer(cfg.Globals, cfg.Server.OSEnvWhitelist, cfg.Server.FakerSeed)
 	ring := recorder.New(50)
 	holder := middleware.NewHolder()
-	holder.Swap(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, ring))
+	holder.Swap(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, ring, nil))
 	srv := httptest.NewServer(holder)
 	defer srv.Close()
 

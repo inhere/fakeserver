@@ -80,12 +80,8 @@ func newServeCmd() *gcli.Command {
 //
 // cfg may be nil — in that case CORS / BodyLimit degrade to no-ops and
 // the chain reduces to recoverer → logger → router.
-func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOptions, ring *recorder.Ring, scenarioStores ...*scenario.Store) http.Handler {
+func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOptions, ring *recorder.Ring, scenarioStore *scenario.Store) http.Handler {
 	r := rux.New()
-	var scenarioStore *scenario.Store
-	if len(scenarioStores) > 0 {
-		scenarioStore = scenarioStores[0]
-	}
 	_ = mock.MountWithRuntime(r, cfg, renderer, mock.RuntimeOptions{
 		ScenarioStore: scenarioStore,
 		CLIScenario:   opts.Scenario,

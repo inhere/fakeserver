@@ -30,7 +30,7 @@ func TestAPIProjects_ReturnsRegistryProjects(t *testing.T) {
 
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, regPath, recorder.New(10))
+	Mount(router, cfg, regPath, recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/projects", nil))
@@ -58,7 +58,7 @@ func TestAPIConfig_RedactsSensitiveKeys(t *testing.T) {
 		},
 	}
 	router := rux.New()
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/config", nil))
@@ -84,7 +84,7 @@ func TestAPIHistory_ReturnsRingSnapshot(t *testing.T) {
 
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", ring)
+	Mount(router, cfg, "", ring, nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/history", nil))
@@ -101,7 +101,7 @@ func TestAPIHistoryDetail_ReturnsEntry(t *testing.T) {
 
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", ring)
+	Mount(router, cfg, "", ring, nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/history/1", nil))
@@ -120,7 +120,7 @@ func TestAPIHistoryDetail_ReturnsEntry(t *testing.T) {
 func TestAPIHistoryDetail_NotFound(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/history/999", nil))
@@ -132,7 +132,7 @@ func TestAPIHistoryDetail_NotFound(t *testing.T) {
 func TestAPIHistoryDetail_BadID(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/history/nope", nil))
@@ -282,7 +282,7 @@ func TestAPIScenarioOverrideInvalidMode(t *testing.T) {
 func TestMount_AdminDisabled_NoEndpoints(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(false)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	endpoints := []string{
 		"/__fakeserver/api/projects",

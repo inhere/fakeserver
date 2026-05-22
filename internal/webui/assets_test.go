@@ -15,7 +15,7 @@ import (
 func TestUIAssets_IndexServedAtRoot(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/", nil))
@@ -39,7 +39,7 @@ func TestUIAssets_IndexServedAtRoot(t *testing.T) {
 func TestUIAssets_IndexServedWithoutTrailingSlash(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui", nil))
@@ -57,7 +57,7 @@ func TestUIAssets_IndexServedWithoutTrailingSlash(t *testing.T) {
 func TestUIAssets_IndexServedByFilename(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/index.html", nil))
@@ -72,7 +72,7 @@ func TestUIAssets_IndexServedByFilename(t *testing.T) {
 func TestUIAssets_MissingFileReturns404(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/missing.css", nil))
@@ -84,7 +84,7 @@ func TestUIAssets_MissingFileReturns404(t *testing.T) {
 func TestUIAssets_CSSAndJSContracts(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	css := httptest.NewRecorder()
 	router.ServeHTTP(css, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/style.css", nil))
@@ -114,7 +114,7 @@ func TestUIAssets_CSSAndJSContracts(t *testing.T) {
 func TestUIAssets_DebugConsoleContracts(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	index := httptest.NewRecorder()
 	router.ServeHTTP(index, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/", nil))
@@ -142,7 +142,7 @@ func TestUIAssets_DebugConsoleContracts(t *testing.T) {
 func TestUIAssets_ReplayContracts(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	js := httptest.NewRecorder()
 	router.ServeHTTP(js, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/main.js", nil))
@@ -157,7 +157,7 @@ func TestUIAssets_ReplayContracts(t *testing.T) {
 func TestUIAssets_RouteTesterContracts(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	index := httptest.NewRecorder()
 	router.ServeHTTP(index, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/", nil))
@@ -180,7 +180,7 @@ func TestUIAssets_RouteTesterContracts(t *testing.T) {
 func TestUIAssets_AdminDisabledNoEndpoints(t *testing.T) {
 	router := rux.New()
 	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(false)}}
-	Mount(router, cfg, "", recorder.New(10))
+	Mount(router, cfg, "", recorder.New(10), nil)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/", nil))

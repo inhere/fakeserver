@@ -16,13 +16,9 @@ import (
 // Mount 注册 webui 端点到 router。
 // 当 cfg.Server.AdminEnabled == false 时整体跳过（design §11.6）。
 // regPath：~/.config/fakeserver/projects.json 的绝对路径，用于 /api/projects。
-func Mount(r *rux.Router, cfg *config.Config, regPath string, ring *recorder.Ring, scenarioStores ...*scenario.Store) {
+func Mount(r *rux.Router, cfg *config.Config, regPath string, ring *recorder.Ring, scenarioStore *scenario.Store) {
 	if cfg == nil || cfg.Server.AdminEnabled == nil || !*cfg.Server.AdminEnabled {
 		return
-	}
-	var scenarioStore *scenario.Store
-	if len(scenarioStores) > 0 {
-		scenarioStore = scenarioStores[0]
 	}
 	r.GET("/__fakeserver/api/projects", apiProjectsHandler(regPath))
 	r.GET("/__fakeserver/api/config", apiConfigHandler(cfg))

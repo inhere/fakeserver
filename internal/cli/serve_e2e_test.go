@@ -196,7 +196,7 @@ func TestServe_v02_EnvFile_HotReload(t *testing.T) {
 func newHolderWithWatcher(t *testing.T, cfg *config.Config, rdr tpl.Renderer, opts serveOptions, cfgPath string, envName string) http.Handler {
 	t.Helper()
 	holder := middleware.NewHolder()
-	holder.Swap(assembleHandler(cfg, rdr, opts, nil))
+	holder.Swap(assembleHandler(cfg, rdr, opts, nil, nil))
 	watcher, err := config.NewWatcher(cfg.SourcePaths, 300*time.Millisecond, func() {
 		newCfg, lerr := config.Load([]string{cfgPath}, envName, nil)
 		if lerr != nil {
@@ -208,7 +208,7 @@ func newHolderWithWatcher(t *testing.T, cfg *config.Config, rdr tpl.Renderer, op
 			return
 		}
 		newRdr := tpl.NewRenderer(newCfg.Globals, newCfg.Server.OSEnvWhitelist, newCfg.Server.FakerSeed)
-		holder.Swap(assembleHandler(newCfg, newRdr, opts, nil))
+		holder.Swap(assembleHandler(newCfg, newRdr, opts, nil, nil))
 	})
 	if err != nil {
 		t.Fatalf("watcher: %v", err)

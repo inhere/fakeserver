@@ -27,7 +27,7 @@ func TestServeV06_WebUIDebugConsoleE2E(t *testing.T) {
 	rdr := tpl.NewRenderer(cfg.Globals, cfg.Server.OSEnvWhitelist, cfg.Server.FakerSeed)
 	ring := recorder.New(50)
 	holder := middleware.NewHolder()
-	holder.Swap(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, ring))
+	holder.Swap(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true}, ring, nil))
 	srv := httptest.NewServer(holder)
 	defer srv.Close()
 
