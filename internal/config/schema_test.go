@@ -54,6 +54,18 @@ func TestApplyDefaults_CaptureDefaults(t *testing.T) {
 	}
 }
 
+func TestApplyDefaults_ScenarioDefaults(t *testing.T) {
+	cfg := &Config{}
+	applyDefaults(cfg)
+
+	if cfg.Server.Scenario != "" {
+		t.Fatalf("server.scenario default = %q, want empty", cfg.Server.Scenario)
+	}
+	if cfg.Scenarios == nil {
+		t.Fatalf("scenarios map should be initialized")
+	}
+}
+
 func TestApplyDefaults_PreservesNonZero(t *testing.T) {
 	cfg := &Config{
 		Server:   ServerOpts{Port: 9000, MaxBodySize: "5MiB"},

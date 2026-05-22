@@ -114,6 +114,70 @@ func TestValidate_CaptureBadMaxBodySize(t *testing.T) {
 	}
 }
 
+func TestValidate_CaseNamesUniquePerRoute(t *testing.T) {
+	cfg := &Config{Routes: []Route{{
+		Method: []string{"GET"},
+		Path:   "/api/users",
+		Cases: []RouteCase{
+			{Name: "empty", Status: 200, Body: map[string]any{"items": []any{}}},
+			{Name: "empty", Status: 500, Body: map[string]any{"error": "duplicate"}},
+		},
+	}}}
+	applyDefaults(cfg)
+
+	errs := Validate(cfg)
+	if len(errs) == 0 {
+		t.Fatal("duplicate case names should fail validation")
+	}
+	if !strings.Contains(errs[0].Error(), `case name "empty" duplicated`) {
+		t.Fatalf("unexpected error: %v", errs[0])
+	}
+}
+
+func TestValidate_ScenarioReferencesExistingCase(t *testing.T) {
+	cfg := &Config{
+		Server: ServerOpts{Scenario: "emptyUsers"},
+		Routes: []Route{{
+			Method: []string{"GET"},
+			Path:   "/api/users",
+			Cases: []RouteCase{
+				{Name: "success", Status: 200, Body: map[string]any{"items": []any{"alice"}}},
+				{Name: "empty", Status: 200, Body: map[string]any{"items": []any{}}},
+			},
+		}},
+		Scenarios: map[string]ScenarioConfig{
+			"emptyUsers": {Routes: map[string]string{"GET /api/users": "empty"}},
+		},
+	}
+	applyDefaults(cfg)
+
+	if errs := Validate(cfg); len(errs) > 0 {
+		t.Fatalf("valid scenario should pass: %v", errs)
+	}
+}
+
+func TestValidate_ScenarioUnknownRouteAndCase(t *testing.T) {
+	cfg := &Config{
+		Routes: []Route{{
+			Method: []string{"GET"},
+			Path:   "/api/users",
+			Cases:  []RouteCase{{Name: "success", Status: 200}},
+		}},
+		Scenarios: map[string]ScenarioConfig{
+			"broken": {Routes: map[string]string{
+				"GET /api/missing": "empty",
+				"GET /api/users":   "missingCase",
+			}},
+		},
+	}
+	applyDefaults(cfg)
+
+	errs := Validate(cfg)
+	if len(errs) != 2 {
+		t.Fatalf("expected 2 validation errors, got %d: %v", len(errs), errs)
+	}
+}
+
 // containsErrorWith returns true if any error message contains every one
 // of the given substrings (case-sensitive).
 func containsErrorWith(errs []error, subs ...string) bool {

@@ -46,4 +46,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Fallback == "" {
 		cfg.Fallback = "echo"
 	}
+	if cfg.Scenarios == nil {
+		cfg.Scenarios = map[string]ScenarioConfig{}
+	}
 }

@@ -53,7 +53,9 @@ func Validate(cfg *Config) []error {
 	type key struct {
 		method, path string
 	}
-	seen := map[key]int{} // value = first index where seen
+	seen := map[key]int{}                   // value = first index where seen
+	routesBySignature := map[string]Route{} // route signature -> route
+	caseNamesByRoute := map[string]map[string]bool{}
 
 	for i, r := range cfg.Routes {
 		prefix := fmt.Sprintf("routes[%d] (%s %s)", i, strings.Join(r.Method, ","), r.Path)
@@ -73,6 +75,18 @@ func Validate(cfg *Config) []error {
 		// strategy enum
 		if !validStrategy[r.Strategy] {
 			errs = append(errs, fmt.Errorf("%s: strategy %q is not one of random/round-robin/weighted/first-match", prefix, r.Strategy))
+		}
+
+		caseNames := map[string]bool{}
+		for ci, cs := range r.Cases {
+			if cs.Name == "" {
+				continue
+			}
+			if caseNames[cs.Name] {
+				errs = append(errs, fmt.Errorf("%s cases[%d]: case name %q duplicated", prefix, ci, cs.Name))
+				continue
+			}
+			caseNames[cs.Name] = true
 		}
 
 		// when expression syntax pre-check (Phase 4)
@@ -123,10 +137,36 @@ func Validate(cfg *Config) []error {
 				continue
 			}
 			seen[k] = i
+			sig := routeSignature(m, r.Path)
+			routesBySignature[sig] = r
+			caseNamesByRoute[sig] = caseNames
+		}
+	}
+
+	if cfg.Server.Scenario != "" {
+		if _, ok := cfg.Scenarios[cfg.Server.Scenario]; !ok {
+			errs = append(errs, fmt.Errorf("server.scenario %q does not exist in scenarios", cfg.Server.Scenario))
+		}
+	}
+
+	for scenarioName, scenario := range cfg.Scenarios {
+		for sig, caseName := range scenario.Routes {
+			route, ok := routesBySignature[sig]
+			if !ok || len(route.Cases) == 0 {
+				errs = append(errs, fmt.Errorf("scenario %q: route %q does not exist or has no cases", scenarioName, sig))
+				continue
+			}
+			if !caseNamesByRoute[sig][caseName] {
+				errs = append(errs, fmt.Errorf("scenario %q: route %q references unknown case %q", scenarioName, sig, caseName))
+			}
 		}
 	}
 
 	return errs
+}
+
+func routeSignature(method, path string) string {
+	return strings.ToUpper(method) + " " + path
 }
 
 // resolveRoutePath resolves a relative path against the source file of the

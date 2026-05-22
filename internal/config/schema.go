@@ -5,10 +5,11 @@ package config
 // and maps so that consumers (cli/mock/proxy packages) do not need any
 // json5-specific knowledge.
 type Config struct {
-	Server   ServerOpts     `json:"server"`
-	Globals  map[string]any `json:"globals"`
-	Fallback string         `json:"fallback"`
-	Routes   []Route        `json:"routes"`
+	Server    ServerOpts                `json:"server"`
+	Globals   map[string]any            `json:"globals"`
+	Fallback  string                    `json:"fallback"`
+	Routes    []Route                   `json:"routes"`
+	Scenarios map[string]ScenarioConfig `json:"scenarios"`
 
 	// SourcePaths records, in load order, every config file that
 	// contributed to this Config (including @include expansions).
@@ -38,6 +39,7 @@ type Config struct {
 type ServerOpts struct {
 	Host           string        `json:"host"`
 	Port           int           `json:"port"`
+	Scenario       string        `json:"scenario"`
 	CORS           any           `json:"cors"` // true | false | object — kept as raw any here; Phase 5 parses
 	Log            *bool         `json:"log"`  // pointer to detect "unset" vs "false"
 	MaxBodySize    string        `json:"maxBodySize"`
@@ -47,6 +49,11 @@ type ServerOpts struct {
 	FakerSeed      int64         `json:"fakerSeed"`
 	HistorySize    int           `json:"historySize"`
 	ProjectName    string        `json:"projectName"`
+}
+
+// ScenarioConfig selects named route cases for a coordinated runtime state.
+type ScenarioConfig struct {
+	Routes map[string]string `json:"routes"`
 }
 
 // CaptureConfig controls v0.6 request/response capture for the Web UI
@@ -89,6 +96,7 @@ type Route struct {
 
 // RouteCase is one branch inside Route.Cases.
 type RouteCase struct {
+	Name     string            `json:"name"`
 	When     string            `json:"when"`
 	Weight   int               `json:"weight"`
 	Status   int               `json:"status"`
