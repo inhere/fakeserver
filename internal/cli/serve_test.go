@@ -10,11 +10,13 @@ import (
 	"testing"
 
 	"github.com/inhere/fakeserver/internal/config"
+	"github.com/inhere/fakeserver/internal/recorder"
+	"github.com/inhere/fakeserver/internal/scenario"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
 func TestServe_Healthz(t *testing.T) {
-	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil))
+	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil, nil))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/__fakeserver/healthz")
@@ -28,7 +30,7 @@ func TestServe_Healthz(t *testing.T) {
 }
 
 func TestServe_EchoOnAnything(t *testing.T) {
-	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil))
+	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil, nil))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/anything/abc?x=1")
@@ -52,7 +54,7 @@ func TestServe_EchoOnAnything(t *testing.T) {
 // TestServe_EchoCatchAllOnUnknownPath: rux v2 的 MountEchoRoutes 注册了
 // /*path 兜底，未匹配路径会被回显（fallback 默认 echo）。
 func TestServe_EchoCatchAllOnUnknownPath(t *testing.T) {
-	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil))
+	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil, nil))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/totally/unknown/path")
@@ -66,7 +68,7 @@ func TestServe_EchoCatchAllOnUnknownPath(t *testing.T) {
 }
 
 func TestServe_StatusEndpoint(t *testing.T) {
-	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil))
+	ts := httptest.NewServer(assembleHandler(nil, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil, nil))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/status/503")
@@ -88,7 +90,7 @@ func TestServe_E2E_CasesRoute(t *testing.T) {
 		t.Fatalf("validate: %v", errs)
 	}
 	rdr := tpl.NewRenderer(nil, nil, 1)
-	srv := httptest.NewServer(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil))
+	srv := httptest.NewServer(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil, nil))
 	defer srv.Close()
 
 	// branch: fail=1 → 500
@@ -108,6 +110,34 @@ func TestServe_E2E_CasesRoute(t *testing.T) {
 	resp.Body.Close()
 	if got["id"] != "42" {
 		t.Errorf("body=%v want id=42", got)
+	}
+}
+
+func TestAssembleHandler_UsesCLIScenario(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{{
+			Method:   []string{"GET"},
+			Path:     "/api/users",
+			Strategy: "first-match",
+			Cases: []config.RouteCase{
+				{Name: "success", Status: 200, Body: map[string]any{"state": "success"}},
+				{Name: "empty", Status: 200, Body: map[string]any{"state": "empty"}},
+			},
+		}},
+		Scenarios: map[string]config.ScenarioConfig{
+			"emptyUsers": {Routes: map[string]string{"GET /api/users": "empty"}},
+		},
+	}
+	enabled := true
+	cfg.Server.AdminEnabled = &enabled
+	rdr := tpl.NewRenderer(nil, nil, 0)
+	store := scenario.NewStore()
+	handler := assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true, Scenario: "emptyUsers"}, recorder.New(10), store)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/api/users", nil))
+	if !strings.Contains(rr.Body.String(), `"state":"empty"`) {
+		t.Fatalf("response = %s", rr.Body.String())
 	}
 }
 
@@ -138,7 +168,7 @@ func TestServe_E2E_ProxyRouteCoexistsWithMock(t *testing.T) {
 	}
 
 	rdr := tpl.NewRenderer(nil, nil, 1)
-	srv := httptest.NewServer(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil))
+	srv := httptest.NewServer(assembleHandler(cfg, rdr, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil, nil))
 	defer srv.Close()
 
 	// /api/users → precise mock wins
@@ -160,24 +190,36 @@ func TestServe_E2E_ProxyRouteCoexistsWithMock(t *testing.T) {
 
 func TestParseVarOverrides_SingleFlag(t *testing.T) {
 	got := parseVarOverrides([]string{"a=1"})
-	if got["a"] != "1" { t.Errorf("a=%q want 1", got["a"]) }
+	if got["a"] != "1" {
+		t.Errorf("a=%q want 1", got["a"])
+	}
 }
 func TestParseVarOverrides_CommaSeparated(t *testing.T) {
 	got := parseVarOverrides([]string{"a=1,b=2"})
-	if got["a"] != "1" || got["b"] != "2" { t.Errorf("got %v", got) }
+	if got["a"] != "1" || got["b"] != "2" {
+		t.Errorf("got %v", got)
+	}
 }
 func TestParseVarOverrides_MultipleFlag(t *testing.T) {
 	got := parseVarOverrides([]string{"a=1", "b=2"})
-	if got["a"] != "1" || got["b"] != "2" { t.Errorf("got %v", got) }
+	if got["a"] != "1" || got["b"] != "2" {
+		t.Errorf("got %v", got)
+	}
 }
 func TestParseVarOverrides_MixedCSVAndMultiple(t *testing.T) {
 	got := parseVarOverrides([]string{"a=1,b=2", "c=3"})
-	if got["a"] != "1" || got["b"] != "2" || got["c"] != "3" { t.Errorf("got %v", got) }
+	if got["a"] != "1" || got["b"] != "2" || got["c"] != "3" {
+		t.Errorf("got %v", got)
+	}
 }
 func TestParseVarOverrides_MalformedSkipped(t *testing.T) {
 	got := parseVarOverrides([]string{"a=1", "no-equals", "b=2"})
-	if got["a"] != "1" || got["b"] != "2" { t.Errorf("got %v", got) }
-	if _, has := got["no-equals"]; has { t.Error("malformed should be skipped") }
+	if got["a"] != "1" || got["b"] != "2" {
+		t.Errorf("got %v", got)
+	}
+	if _, has := got["no-equals"]; has {
+		t.Error("malformed should be skipped")
+	}
 }
 
 func TestServe_MockRouteRespondsAfterPhase3(t *testing.T) {
@@ -188,7 +230,7 @@ func TestServe_MockRouteRespondsAfterPhase3(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	renderer := tpl.NewRenderer(cfg.Globals, cfg.Server.OSEnvWhitelist, cfg.Server.FakerSeed)
-	ts := httptest.NewServer(assembleHandler(cfg, renderer, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil))
+	ts := httptest.NewServer(assembleHandler(cfg, renderer, serveOptions{Quiet: true, NoCORS: true, NoWatch: true}, nil, nil))
 	defer ts.Close()
 
 	// single-full.json5 的 /ping route 应该被 mock 响应（不再走 echo catch-all）

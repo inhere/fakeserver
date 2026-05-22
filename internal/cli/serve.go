@@ -23,6 +23,7 @@ import (
 	"github.com/inhere/fakeserver/internal/proxy"
 	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/registry"
+	"github.com/inhere/fakeserver/internal/scenario"
 	"github.com/inhere/fakeserver/internal/sizeparse"
 	"github.com/inhere/fakeserver/internal/tpl"
 	"github.com/inhere/fakeserver/internal/webui"
@@ -35,6 +36,7 @@ type serveOptions struct {
 	Quiet        bool
 	NoCORS       bool
 	NoWatch      bool
+	Scenario     string
 	EnvName      string       // --env / -e <name>; "" → fallback FAKESERVER_ENV → file $active → first segment
 	VarOverrides gcli.Strings // --var key=val (multi-flag accumulating; CSV inside single flag allowed)
 }
@@ -54,6 +56,7 @@ func newServeCmd() *gcli.Command {
 			cmd.BoolOpt2(&opts.Quiet, "quiet,q", "Suppress request access log")
 			cmd.BoolOpt2(&opts.NoCORS, "no-cors", "Disable CORS middleware")
 			cmd.BoolOpt2(&opts.NoWatch, "no-watch", "Disable hot-reload watcher")
+			cmd.StrOpt2(&opts.Scenario, "scenario", "Default scenario name for this serve process")
 			cmd.StrOpt2(&opts.EnvName, "env,e", "Environment segment name (override env file $active and FAKESERVER_ENV)")
 			cmd.VarOpt2(&opts.VarOverrides, "var", "Variable override key=val (repeatable; comma-separated allowed)")
 		},
@@ -77,9 +80,16 @@ func newServeCmd() *gcli.Command {
 //
 // cfg may be nil — in that case CORS / BodyLimit degrade to no-ops and
 // the chain reduces to recoverer → logger → router.
-func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOptions, ring *recorder.Ring) http.Handler {
+func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOptions, ring *recorder.Ring, scenarioStores ...*scenario.Store) http.Handler {
 	r := rux.New()
-	_ = mock.Mount(r, cfg, renderer)
+	var scenarioStore *scenario.Store
+	if len(scenarioStores) > 0 {
+		scenarioStore = scenarioStores[0]
+	}
+	_ = mock.MountWithRuntime(r, cfg, renderer, mock.RuntimeOptions{
+		ScenarioStore: scenarioStore,
+		CLIScenario:   opts.Scenario,
+	})
 	_ = proxy.Mount(r, cfg, renderer)
 	if adminOn(cfg) {
 		admin.Mount(r, cfg)
@@ -319,6 +329,7 @@ func runServe(opts serveOptions) error {
 		historySize = cfg.Server.HistorySize
 	}
 	ring := recorder.New(historySize)
+	scenarioStore := scenario.NewStore()
 
 	// v0.4 Phase 1：0.0.0.0 + adminEnabled 组合发 WARNING（design §11.6）。
 	if cfg != nil && cfg.Server.Host == "0.0.0.0" && cfg.Server.AdminEnabled != nil && *cfg.Server.AdminEnabled {
@@ -326,7 +337,7 @@ func runServe(opts serveOptions) error {
 	}
 
 	holder := middleware.NewHolder()
-	holder.Swap(assembleHandler(cfg, renderer, opts, ring))
+	holder.Swap(assembleHandler(cfg, renderer, opts, ring, scenarioStore))
 	currentCfg := cfg
 
 	// Start hot-reload watcher if config came from a file and --no-watch isn't set
@@ -350,7 +361,7 @@ func runServe(opts serveOptions) error {
 				fmt.Fprintln(os.Stderr, "warn (reload):", w)
 			}
 			newRenderer := tpl.NewRenderer(newCfg.Globals, newCfg.Server.OSEnvWhitelist, newCfg.Server.FakerSeed)
-			holder.Swap(assembleHandler(newCfg, newRenderer, opts, ring))
+			holder.Swap(assembleHandler(newCfg, newRenderer, opts, ring, scenarioStore))
 			emitRouteReload(ring, currentCfg, newCfg)
 			currentCfg = newCfg
 			fmt.Fprintln(os.Stderr, "info: config reloaded; router swapped")
