@@ -48,6 +48,12 @@ fakeserver check --strict -c fakeserver.json5
 fakeserver serve -c fakeserver.json5 --env dev
 ```
 
+如果希望启动后默认进入某个场景，可以加 `--scenario`：
+
+```bash
+fakeserver serve -c fakeserver.json5 --env dev --scenario emptyUsers
+```
+
 启动后打开：
 
 ```text
@@ -126,6 +132,59 @@ Routes 页面每条 route 有 Test 按钮。测试面板支持：
 
 发送后会展示响应 status、headers、body 和耗时，同时 History 会追加一条新记录。
 
+### 切换场景
+
+`init --full` 生成的配置包含命名 cases 和 scenarios。典型配置形态：
+
+```json5
+scenarios: {
+  emptyUsers: {
+    routes: {
+      "GET /api/users": "empty",
+    },
+  },
+  serverErrors: {
+    routes: {
+      "GET /api/users": "server-error",
+    },
+  },
+},
+```
+
+默认场景可以写在配置中：
+
+```json5
+server: {
+  scenario: "emptyUsers",
+}
+```
+
+也可以通过启动参数覆盖：
+
+```bash
+fakeserver serve -c fakeserver.json5 --env dev --scenario emptyUsers
+```
+
+单次请求可以通过 header 覆盖当前场景：
+
+```bash
+curl -H "X-Fakeserver-Scenario: serverErrors" http://127.0.0.1:5090/api/users
+```
+
+优先级是：
+
+```text
+X-Fakeserver-Scenario > Web UI selected scenario > --scenario > server.scenario > 默认策略
+```
+
+Web UI 顶部的 Scenario 下拉框会设置运行期 selected scenario，不会改写配置文件。Routes 页面还可以对单条 route 设置 case override：
+
+- `Always`：持续强制返回该 case，直到清除。
+- `Next request`：只强制下一次请求。
+- `Next N requests`：强制接下来 N 次请求。
+
+override 优先于 scenario。History 详情会显示本次请求使用的 scenario、case name 和 override source，便于确认前端看到的状态来源。
+
 ### 修改配置热加载
 
 修改 `fakeserver.json5` 或 `.fakeserver/routes/*.json5` 后，serve 默认会热加载。Web UI 会收到 reload 事件并刷新路由/配置数据。
@@ -140,9 +199,9 @@ Routes 页面每条 route 有 Test 按钮。测试面板支持：
   path: "/api/users",
   strategy: "first-match",
   cases: [
-    { when: "request.query.empty == \"1\"", status: 200, body: { items: [] } },
-    { when: "request.query.fail == \"1\"", status: 500, body: { error: "failed" } },
-    { status: 200, body: { items: [{ id: "1", name: "alice" }] } },
+    { name: "empty", when: "request.query.empty == \"1\"", status: 200, body: { items: [] } },
+    { name: "server-error", when: "request.query.fail == \"1\"", status: 500, body: { error: "failed" } },
+    { name: "success", status: 200, body: { items: [{ id: "1", name: "alice" }] } },
   ],
 }
 ```

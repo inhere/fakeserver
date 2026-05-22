@@ -25,6 +25,7 @@
 | 2026-05-21 | v0.4-phase0.4.3-applied | inhere | v0.4 Phase 3：embed 静态 UI + 4 个只读视图 + EventSource 历史追加 + watcher reload SSE 接入 |
 | 2026-05-21 | v0.5-devex-applied | inhere | v0.5：开发体验增强，含 init --full、check --strict、doctor、banner UI/env 信息、运行期错误上下文 |
 | 2026-05-21 | v0.6-debug-console-applied | inhere | v0.6：Web UI 调试台，含 history detail、route metadata、capture、copy curl、replay、route tester |
+| 2026-05-22 | v0.7-scenario-control-applied | inhere | v0.7：场景与异常态控制，含 case name、scenario 配置、CLI/header/UI 优先级、runtime override store、Web UI 控制 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -1294,6 +1295,12 @@ if seed == 0 {
 1. **recorder detail/capture/trace 闭环**：history entry 增加稳定 ID、route/case/proxy 命中元数据与 request/response capture；logger 通过 request context trace 汇总 handler 写入的命中信息。
 2. **History 调试操作就绪**：新增 history detail API 与 UI 抽屉，展示请求/响应 headers/body、route source、case index、proxy target；支持 Copy as curl 与浏览器同源 Replay。
 3. **Routes tester 与 metadata 就绪**：`/__fakeserver/routes` 输出 index/source/cases/proxyTarget/params，Routes 页面可直接构造 method/path/query/headers/body 并发送测试请求。
+
+### 已落地（v0.7 场景与异常态控制阶段确认）
+
+1. **case name + scenarios 成为稳定状态切换层**：cases 支持 `name`，`scenarios` 可按 `METHOD /path` 指定 case name，validate 会拦截重复 case name、未知 route、未知 case。
+2. **请求级与运行期优先级明确**：`X-Fakeserver-Scenario` > UI selected scenario > CLI `--scenario` > `server.scenario` > 默认策略；route override 支持 always/next/count 并优先于 scenario。
+3. **Web UI 可操作异常态**：UI 可切换 selected scenario，并可对单 route 设置/清除 case override；history detail 记录 scenario、case name 与 override source。
 
 ### 待评审
 

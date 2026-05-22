@@ -1318,7 +1318,7 @@ git commit -m "feat(webui): add scenario control api"
 - Modify: `internal/webui/assets/main.js`
 - Modify: `internal/webui/assets_test.go`
 
-- [ ] **Step 7.1: 写 asset contract tests**
+- [x] **Step 7.1: 写 asset contract tests**
 
 在 `internal/webui/assets_test.go` 增加：
 
@@ -1363,7 +1363,7 @@ go test ./internal/webui -run TestUIAssets_ScenarioControlContracts -count=1
 
 Expected: FAIL。
 
-- [ ] **Step 7.2: HTML 增加全局 scenario 控制**
+- [x] **Step 7.2: HTML 增加全局 scenario 控制**
 
 在 `index.html` 顶部 toolbar 或 header 区域增加：
 
@@ -1395,7 +1395,7 @@ Expected: FAIL。
 </section>
 ```
 
-- [ ] **Step 7.3: JS state 扩展**
+- [x] **Step 7.3: JS state 扩展**
 
 `main.js` 顶部 state 改为：
 
@@ -1422,7 +1422,7 @@ getJSON("/__fakeserver/api/scenario")
 renderScenarioControls();
 ```
 
-- [ ] **Step 7.4: 渲染 scenario selector**
+- [x] **Step 7.4: 渲染 scenario selector**
 
 实现：
 
@@ -1453,7 +1453,7 @@ async function setSelectedScenario(name) {
 }
 ```
 
-- [ ] **Step 7.5: Routes row 展示 cases 与 override**
+- [x] **Step 7.5: Routes row 展示 cases 与 override**
 
 `renderRoutes` 中对 cases route 增加按钮：
 
@@ -1468,7 +1468,7 @@ async function setSelectedScenario(name) {
 - 设置 `state.selectedRoute`。
 - 显示 panel。
 
-- [ ] **Step 7.6: apply/clear override**
+- [x] **Step 7.6: apply/clear override**
 
 实现：
 
@@ -1504,7 +1504,7 @@ async function clearRouteOverride() {
 }
 ```
 
-- [ ] **Step 7.7: CSS 控制布局**
+- [x] **Step 7.7: CSS 控制布局**
 
 新增样式要求：
 
@@ -1513,7 +1513,7 @@ async function clearRouteOverride() {
 - 移动端 input/select/button 不溢出。
 - override status 用 `white-space: pre-wrap; overflow:auto;`。
 
-- [ ] **Step 7.8: 验证并提交**
+- [x] **Step 7.8: 验证并提交**
 
 Run:
 
@@ -1537,7 +1537,7 @@ git commit -m "feat(webui): add scenario controls"
 - Modify: `internal/cli/init_test.go`
 - Create: `internal/cli/serve_v07_e2e_test.go`
 
-- [ ] **Step 8.1: full init failing test**
+- [x] **Step 8.1: full init failing test**
 
 在 `internal/cli/init_test.go` 增加：
 
@@ -1564,7 +1564,7 @@ func TestRunInitFull_IncludesScenarios(t *testing.T) {
 }
 ```
 
-- [ ] **Step 8.2: 更新 full template**
+- [x] **Step 8.2: 更新 full template**
 
 在 `internal/cli/full_templates.go` 的 users/orders/auth cases 中补 name，例如：
 
@@ -1600,7 +1600,7 @@ scenarios: {
 
 确保引用的 route/case 都真实存在。
 
-- [ ] **Step 8.3: 新增 v0.7 E2E**
+- [x] **Step 8.3: 新增 v0.7 E2E**
 
 创建 `internal/cli/serve_v07_e2e_test.go`：
 
@@ -1698,7 +1698,7 @@ func readBody(t *testing.T, resp *http.Response) string {
 
 并添加 `io` import。
 
-- [ ] **Step 8.4: 验证并提交**
+- [x] **Step 8.4: 验证并提交**
 
 Run:
 
@@ -1722,7 +1722,7 @@ git commit -m "feat(cli): add scenario examples and e2e"
 - Modify: `docs/fakeserver-design.md`
 - Modify: `docs/plans/2026-05-22-fakeserver-v0.7-scenario-control-plan.md`
 
-- [ ] **Step 9.1: 更新 usage 文档**
+- [x] **Step 9.1: 更新 usage 文档**
 
 在 `docs/usage/frontend-workflow.md` 的“模拟异常态”前后增加：
 
@@ -1739,7 +1739,7 @@ fakeserver serve -c fakeserver.json5 --env dev --scenario emptyUsers
 curl -H 'X-Fakeserver-Scenario: authExpired' http://127.0.0.1:5090/api/profile
 ```
 
-- [ ] **Step 9.2: 回写 design**
+- [x] **Step 9.2: 回写 design**
 
 在 `docs/fakeserver-design.md` 顶部修订表追加：
 
@@ -1757,11 +1757,11 @@ curl -H 'X-Fakeserver-Scenario: authExpired' http://127.0.0.1:5090/api/profile
 3. **Web UI 可操作异常态**：UI 可切换 selected scenario，并可对单 route 设置/清除 case override；history detail 记录 scenario、case name 与 override source。
 ```
 
-- [ ] **Step 9.3: 勾选本计划 Acceptance Checklist**
+- [x] **Step 9.3: 勾选本计划 Acceptance Checklist**
 
 完成实现后，把 §15 中已完成项改为 `[x]`。
 
-- [ ] **Step 9.4: 运行质量门禁**
+- [x] **Step 9.4: 运行质量门禁**
 
 Run:
 
@@ -1777,7 +1777,7 @@ Expected:
 - 所有命令通过。
 - 如果 coverage 输出中某包低于既有阶段要求，不要求本阶段强行补齐全项目覆盖，但新增 `internal/scenario` 应有高覆盖。
 
-- [ ] **Step 9.5: 提交文档收尾**
+- [x] **Step 9.5: 提交文档收尾**
 
 Commit:
 
@@ -1855,41 +1855,41 @@ curl http://127.0.0.1:5090/__fakeserver/api/scenario
 
 ## 15. Acceptance Checklist
 
-- [ ] `RouteCase.Name` 可从 JSON5 加载。
-- [ ] `Config.Scenarios` 可从 JSON5 加载。
-- [ ] `server.scenario` 可从 JSON5 加载。
-- [ ] validate 拦截同 route 重复 case name。
-- [ ] validate 拦截 unknown `server.scenario`。
-- [ ] validate 拦截 scenario unknown route signature。
-- [ ] validate 拦截 scenario unknown case name。
-- [ ] `internal/scenario.Store` 支持 selected scenario。
-- [ ] `Store` 支持 always override。
-- [ ] `Store` 支持 next override 并消费后清除。
-- [ ] `Store` 支持 count override 并按剩余次数递减。
-- [ ] scenario resolver 实现 header > UI > CLI > config > empty。
-- [ ] cases route 优先使用 route override。
-- [ ] cases route 其次使用 scenario 指定 case。
-- [ ] cases route fallback 保持既有 strategy/when 逻辑。
-- [ ] recorder history entry 记录 scenario。
-- [ ] recorder history entry 记录 case name。
-- [ ] recorder history entry 记录 override source。
-- [ ] `serve --scenario` 生效。
-- [ ] hot reload 后 scenario runtime store 不丢失。
-- [ ] `/__fakeserver/routes` 返回 case name 和 scenario case 映射。
-- [ ] `/__fakeserver/api/scenario` GET 返回 selected/overrides。
-- [ ] `/__fakeserver/api/scenario` PUT 可设置 selected scenario。
-- [ ] `/__fakeserver/api/scenario/overrides` PUT 可设置 route override。
-- [ ] `/__fakeserver/api/scenario/overrides` DELETE 可清除 route override。
-- [ ] Web UI 有 scenario selector。
-- [ ] Web UI Routes 页面可设置 route case override。
-- [ ] Web UI History 详情显示 scenario/case/override source。
-- [ ] `init --full` 示例包含 named cases。
-- [ ] `init --full` 示例包含 scenarios。
-- [ ] `docs/usage/frontend-workflow.md` 说明 v0.7 用法。
-- [ ] `docs/fakeserver-design.md` 追加 v0.7 落地记录。
-- [ ] `go test ./... -count=1` 通过。
-- [ ] `go vet ./...` 通过。
-- [ ] `go build ./...` 通过。
+- [x] `RouteCase.Name` 可从 JSON5 加载。
+- [x] `Config.Scenarios` 可从 JSON5 加载。
+- [x] `server.scenario` 可从 JSON5 加载。
+- [x] validate 拦截同 route 重复 case name。
+- [x] validate 拦截 unknown `server.scenario`。
+- [x] validate 拦截 scenario unknown route signature。
+- [x] validate 拦截 scenario unknown case name。
+- [x] `internal/scenario.Store` 支持 selected scenario。
+- [x] `Store` 支持 always override。
+- [x] `Store` 支持 next override 并消费后清除。
+- [x] `Store` 支持 count override 并按剩余次数递减。
+- [x] scenario resolver 实现 header > UI > CLI > config > empty。
+- [x] cases route 优先使用 route override。
+- [x] cases route 其次使用 scenario 指定 case。
+- [x] cases route fallback 保持既有 strategy/when 逻辑。
+- [x] recorder history entry 记录 scenario。
+- [x] recorder history entry 记录 case name。
+- [x] recorder history entry 记录 override source。
+- [x] `serve --scenario` 生效。
+- [x] hot reload 后 scenario runtime store 不丢失。
+- [x] `/__fakeserver/routes` 返回 case name 和 scenario case 映射。
+- [x] `/__fakeserver/api/scenario` GET 返回 selected/overrides。
+- [x] `/__fakeserver/api/scenario` PUT 可设置 selected scenario。
+- [x] `/__fakeserver/api/scenario/overrides` PUT 可设置 route override。
+- [x] `/__fakeserver/api/scenario/overrides` DELETE 可清除 route override。
+- [x] Web UI 有 scenario selector。
+- [x] Web UI Routes 页面可设置 route case override。
+- [x] Web UI History 详情显示 scenario/case/override source。
+- [x] `init --full` 示例包含 named cases。
+- [x] `init --full` 示例包含 scenarios。
+- [x] `docs/usage/frontend-workflow.md` 说明 v0.7 用法。
+- [x] `docs/fakeserver-design.md` 追加 v0.7 落地记录。
+- [x] `go test ./... -count=1` 通过。
+- [x] `go vet ./...` 通过。
+- [x] `go build ./...` 通过。
 
 ---
 
