@@ -43,3 +43,21 @@ func TestRequestTraceContext(t *testing.T) {
 func TestSetRouteMatch_IgnoresMissingTrace(t *testing.T) {
 	SetRouteMatch(context.Background(), RequestTrace{RouteMode: "mock"})
 }
+
+func TestRequestTraceScenarioFields(t *testing.T) {
+	ctx, trace := WithRequestTrace(context.Background())
+	SetRouteMatch(ctx, RequestTrace{
+		Scenario:       "emptyUsers",
+		CaseName:       "empty",
+		OverrideSource: "scenario",
+	})
+	if trace.Scenario != "emptyUsers" {
+		t.Fatalf("Scenario=%q", trace.Scenario)
+	}
+	if trace.CaseName != "empty" {
+		t.Fatalf("CaseName=%q", trace.CaseName)
+	}
+	if trace.OverrideSource != "scenario" {
+		t.Fatalf("OverrideSource=%q", trace.OverrideSource)
+	}
+}

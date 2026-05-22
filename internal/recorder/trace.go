@@ -6,11 +6,14 @@ type traceContextKey struct{}
 
 // RequestTrace stores route-match metadata collected by downstream handlers.
 type RequestTrace struct {
-	RouteIndex  *int
-	CaseIndex   *int
-	RouteMode   string
-	RouteSource string
-	ProxyTarget string
+	RouteIndex     *int
+	CaseIndex      *int
+	RouteMode      string
+	RouteSource    string
+	ProxyTarget    string
+	Scenario       string
+	CaseName       string
+	OverrideSource string
 }
 
 // WithRequestTrace attaches a mutable trace holder to ctx.
@@ -45,5 +48,14 @@ func SetRouteMatch(ctx context.Context, update RequestTrace) {
 	}
 	if update.ProxyTarget != "" {
 		trace.ProxyTarget = update.ProxyTarget
+	}
+	if update.Scenario != "" {
+		trace.Scenario = update.Scenario
+	}
+	if update.CaseName != "" {
+		trace.CaseName = update.CaseName
+	}
+	if update.OverrideSource != "" {
+		trace.OverrideSource = update.OverrideSource
 	}
 }

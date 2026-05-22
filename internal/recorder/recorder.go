@@ -21,20 +21,23 @@ type Capture struct {
 
 // Entry 是 ring 中单条记录（design §11.4）。不包含请求/响应 body。
 type Entry struct {
-	ID          uint64    `json:"id"`
-	TS          time.Time `json:"ts"`
-	Method      string    `json:"method"`
-	Path        string    `json:"path"`
-	Status      int       `json:"status"`
-	DurationMs  float64   `json:"durationMs"`
-	ClientIP    string    `json:"clientIp,omitempty"`
-	RouteIndex  *int      `json:"routeIndex,omitempty"`
-	CaseIndex   *int      `json:"caseIndex,omitempty"`
-	RouteMode   string    `json:"routeMode,omitempty"`
-	RouteSource string    `json:"routeSource,omitempty"`
-	ProxyTarget string    `json:"proxyTarget,omitempty"`
-	Request     Capture   `json:"request,omitempty"`
-	Response    Capture   `json:"response,omitempty"`
+	ID             uint64    `json:"id"`
+	TS             time.Time `json:"ts"`
+	Method         string    `json:"method"`
+	Path           string    `json:"path"`
+	Status         int       `json:"status"`
+	DurationMs     float64   `json:"durationMs"`
+	ClientIP       string    `json:"clientIp,omitempty"`
+	RouteIndex     *int      `json:"routeIndex,omitempty"`
+	CaseIndex      *int      `json:"caseIndex,omitempty"`
+	RouteMode      string    `json:"routeMode,omitempty"`
+	RouteSource    string    `json:"routeSource,omitempty"`
+	ProxyTarget    string    `json:"proxyTarget,omitempty"`
+	Scenario       string    `json:"scenario,omitempty"`
+	CaseName       string    `json:"caseName,omitempty"`
+	OverrideSource string    `json:"overrideSource,omitempty"`
+	Request        Capture   `json:"request,omitempty"`
+	Response       Capture   `json:"response,omitempty"`
 }
 
 // ReloadDiff 描述一次 holder.Swap 后路由表的增删改差异（design §11.3 event: reload）。

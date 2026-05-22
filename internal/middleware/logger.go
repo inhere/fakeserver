@@ -57,19 +57,22 @@ func Logger(out io.Writer, opts LoggerOptions, ring *recorder.Ring) func(http.Ha
 			}
 			if ring != nil {
 				ring.Append(recorder.Entry{
-					TS:          start.UTC(),
-					Method:      r.Method,
-					Path:        r.URL.Path,
-					Status:      lr.status,
-					DurationMs:  float64(dur.Microseconds()) / 1000.0,
-					ClientIP:    clientIP(r),
-					RouteIndex:  trace.RouteIndex,
-					CaseIndex:   trace.CaseIndex,
-					RouteMode:   trace.RouteMode,
-					RouteSource: trace.RouteSource,
-					ProxyTarget: trace.ProxyTarget,
-					Request:     finalizeCapture(*reqCap, r.Header.Get("Content-Type"), opts),
-					Response:    finalizeCapture(lr.capture(), lr.Header().Get("Content-Type"), opts),
+					TS:             start.UTC(),
+					Method:         r.Method,
+					Path:           r.URL.Path,
+					Status:         lr.status,
+					DurationMs:     float64(dur.Microseconds()) / 1000.0,
+					ClientIP:       clientIP(r),
+					RouteIndex:     trace.RouteIndex,
+					CaseIndex:      trace.CaseIndex,
+					RouteMode:      trace.RouteMode,
+					RouteSource:    trace.RouteSource,
+					ProxyTarget:    trace.ProxyTarget,
+					Scenario:       trace.Scenario,
+					CaseName:       trace.CaseName,
+					OverrideSource: trace.OverrideSource,
+					Request:        finalizeCapture(*reqCap, r.Header.Get("Content-Type"), opts),
+					Response:       finalizeCapture(lr.capture(), lr.Header().Get("Content-Type"), opts),
 				})
 			}
 		})

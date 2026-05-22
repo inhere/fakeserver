@@ -195,6 +195,28 @@ func TestLogger_AppendsTraceFields(t *testing.T) {
 	}
 }
 
+func TestLogger_AppendsScenarioTraceFields(t *testing.T) {
+	ring := recorder.New(10)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recorder.SetRouteMatch(r.Context(), recorder.RequestTrace{
+			Scenario:       "emptyUsers",
+			CaseName:       "empty",
+			OverrideSource: "scenario",
+		})
+		w.WriteHeader(http.StatusOK)
+	})
+	wrapped := Logger(io.Discard, LoggerOptions{Quiet: true}, ring)(handler)
+	wrapped.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/users", nil))
+
+	entries := ring.Snapshot()
+	if len(entries) != 1 {
+		t.Fatalf("entries=%d", len(entries))
+	}
+	if entries[0].Scenario != "emptyUsers" || entries[0].CaseName != "empty" || entries[0].OverrideSource != "scenario" {
+		t.Fatalf("scenario trace not recorded: %#v", entries[0])
+	}
+}
+
 func TestLogger_CapturesTextRequestAndResponseBody(t *testing.T) {
 	ring := recorder.New(10)
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
