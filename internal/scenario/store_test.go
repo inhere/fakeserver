@@ -1,6 +1,10 @@
 package scenario
 
-import "testing"
+import (
+	"fmt"
+	"sync"
+	"testing"
+)
 
 func TestRouteKeySignature(t *testing.T) {
 	key := NewRouteKey("get", "/api/users")
@@ -81,4 +85,26 @@ func TestStoreConsumeOverrideModes(t *testing.T) {
 			t.Fatalf("always override consume %d = %#v ok=%v", i, ov, ok)
 		}
 	}
+}
+
+func TestStoreConcurrentAccess(t *testing.T) {
+	s := NewStore()
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			key := NewRouteKey("GET", fmt.Sprintf("/api/%d", i%10))
+			s.SetSelected(fmt.Sprintf("scenario-%d", i%5))
+			_ = s.Selected()
+			s.SetOverride(key, Override{CaseName: "success", Mode: "count", Remaining: 2})
+			_, _ = s.ConsumeOverride(key)
+			_ = s.Snapshot()
+			if i%3 == 0 {
+				s.ClearOverride(key)
+			}
+		}(i)
+	}
+	wg.Wait()
+	_ = s.Snapshot()
 }
