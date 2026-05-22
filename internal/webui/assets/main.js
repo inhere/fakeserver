@@ -1,6 +1,13 @@
 (function () {
   const views = ["projects", "routes", "history", "config"];
-  const state = { history: [], routes: [], selectedEntry: null };
+  const state = {
+    history: [],
+    routes: [],
+    selectedEntry: null,
+    config: {},
+    scenario: { selected: "", overrides: {} },
+    selectedRoute: null,
+  };
 
   const $ = (id) => document.getElementById(id);
 
@@ -34,6 +41,11 @@
     return resp.json();
   }
 
+  async function loadScenarioState() {
+    state.scenario = await getJSON("/__fakeserver/api/scenario");
+    return state.scenario;
+  }
+
   function renderProjects(projects) {
     const body = $("projects-body");
     if (!projects.length) {
@@ -55,11 +67,123 @@
     $("routes-body").innerHTML = routes.length ? routes.map((r) => row([
       `<span class="method">${escapeHTML(r.method)}</span>`,
       escapeHTML(r.path),
-      `${escapeHTML(r.mode)} <button type="button" data-test-route-index="${escapeHTML(r.index)}" data-test-route-method="${escapeHTML(r.method)}">Test</button>`,
+      routeModeCell(r),
     ])).join("") : '<tr><td colspan="3">No routes loaded.</td></tr>';
     for (const btn of $("routes-body").querySelectorAll("[data-test-route-index]")) {
       btn.addEventListener("click", () => openRouteTester(Number(btn.dataset.testRouteIndex), btn.dataset.testRouteMethod));
     }
+    for (const btn of $("routes-body").querySelectorAll("[data-override-route-index]")) {
+      btn.addEventListener("click", () => openRouteOverride(Number(btn.dataset.overrideRouteIndex), btn.dataset.overrideRouteMethod));
+    }
+  }
+
+  function routeModeCell(route) {
+    const parts = [escapeHTML(route.mode)];
+    if (Array.isArray(route.cases) && route.cases.length) {
+      const caseNames = route.cases.map((c, index) => c.name || `case #${c.index ?? index}`).join(", ");
+      parts.push(`<span class="case-list">${escapeHTML(caseNames)}</span>`);
+      parts.push(`<button type="button" data-override-route-index="${escapeHTML(route.index)}" data-override-route-method="${escapeHTML(route.method)}">Override</button>`);
+    }
+    parts.push(`<button type="button" data-test-route-index="${escapeHTML(route.index)}" data-test-route-method="${escapeHTML(route.method)}">Test</button>`);
+    return parts.join(" ");
+  }
+
+  function scenarioNames() {
+    const names = new Set();
+    const scenarios = state.config && state.config.scenarios ? Object.keys(state.config.scenarios) : [];
+    for (const name of scenarios) names.add(name);
+    if (state.scenario.selected) names.add(state.scenario.selected);
+    for (const route of state.routes || []) {
+      for (const name of Object.keys(route.scenarios || {})) names.add(name);
+    }
+    return ["", ...Array.from(names).sort()];
+  }
+
+  function renderScenarioControls() {
+    const select = $("scenario-select");
+    select.innerHTML = scenarioNames().map((name) => {
+      const label = name || "(none)";
+      return `<option value="${escapeHTML(name)}">${escapeHTML(label)}</option>`;
+    }).join("");
+    select.value = state.scenario.selected || "";
+  }
+
+  async function setSelectedScenario(name) {
+    const resp = await fetch("/__fakeserver/api/scenario", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selected: name }),
+    });
+    if (!resp.ok) throw new Error(`set scenario failed: ${resp.status}`);
+    state.scenario = await resp.json();
+    renderScenarioControls();
+  }
+
+  function overrideKey(route) {
+    return `${String(route.method || "").toUpperCase()} ${route.path || ""}`;
+  }
+
+  function renderOverrideStatus() {
+    const box = $("override-status");
+    if (!state.selectedRoute) {
+      box.textContent = "";
+      return;
+    }
+    const key = overrideKey(state.selectedRoute);
+    const active = (state.scenario.overrides || {})[key] || null;
+    box.textContent = JSON.stringify({ route: key, override: active }, null, 2);
+  }
+
+  function openRouteOverride(index, method) {
+    const route = state.routes.find((r) => Number(r.index) === index && r.method === method) || state.routes.find((r) => Number(r.index) === index);
+    if (!route || !Array.isArray(route.cases) || !route.cases.length) return;
+    state.selectedRoute = route;
+    $("route-override-panel").hidden = false;
+    $("override-title").textContent = `${route.method || "-"} ${route.path || "/"}`;
+    $("override-case").innerHTML = route.cases.map((item, idx) => {
+      const index = item.index ?? idx;
+      const name = item.name || "";
+      const label = name || `case #${index}`;
+      const disabled = name ? "" : " disabled";
+      return `<option value="${escapeHTML(name)}"${disabled}>${escapeHTML(label)}</option>`;
+    }).join("");
+    const firstNamed = route.cases.find((item) => item.name);
+    $("override-case").value = firstNamed ? firstNamed.name : "";
+    $("override-apply").disabled = !firstNamed;
+    $("override-mode").value = "always";
+    $("override-remaining").value = "1";
+    renderOverrideStatus();
+    location.hash = "routes";
+  }
+
+  async function applyRouteOverride() {
+    const route = state.selectedRoute;
+    if (!route) return;
+    const payload = {
+      method: route.method,
+      path: route.path,
+      caseName: $("override-case").value,
+      mode: $("override-mode").value,
+      remaining: Number($("override-remaining").value || "1"),
+    };
+    const resp = await fetch("/__fakeserver/api/scenario/overrides", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) throw new Error(`override failed: ${resp.status}`);
+    state.scenario = await resp.json();
+    renderOverrideStatus();
+  }
+
+  async function clearRouteOverride() {
+    const route = state.selectedRoute;
+    if (!route) return;
+    const query = new URLSearchParams({ method: route.method, path: route.path });
+    const resp = await fetch(`/__fakeserver/api/scenario/overrides?${query}`, { method: "DELETE" });
+    if (!resp.ok) throw new Error(`clear override failed: ${resp.status}`);
+    state.scenario = await resp.json();
+    renderOverrideStatus();
   }
 
   function statusClass(status) {
@@ -132,6 +256,9 @@
           <div>Mode</div><div>${escapeHTML(entry.routeMode || "-")}</div>
           <div>Route index</div><div>${escapeHTML(entry.routeIndex ?? "-")}</div>
           <div>Case index</div><div>${escapeHTML(entry.caseIndex ?? "-")}</div>
+          <div>Case name</div><div>${escapeHTML(entry.caseName || "-")}</div>
+          <div>Scenario</div><div>${escapeHTML(entry.scenario || "-")}</div>
+          <div>Override source</div><div>${escapeHTML(entry.overrideSource || "-")}</div>
           <div>Source</div><div>${escapeHTML(entry.routeSource || "-")}</div>
           <div>Proxy target</div><div>${escapeHTML(entry.proxyTarget || "-")}</div>
         </div>
@@ -313,22 +440,31 @@
     $("config-body").textContent = JSON.stringify(cfg, null, 2);
   }
 
-  async function refreshAll() {
+  async function loadAll() {
     try {
-      const [projects, routes, history, cfg] = await Promise.all([
+      const [projects, routes, history, cfg, scenario] = await Promise.all([
         getJSON("/__fakeserver/api/projects"),
         getJSON("/__fakeserver/routes"),
         getJSON("/__fakeserver/api/history"),
         getJSON("/__fakeserver/api/config"),
+        loadScenarioState(),
       ]);
       state.history = history;
+      state.config = cfg;
+      state.scenario = scenario;
       renderProjects(projects);
       renderRoutes(routes);
       renderHistory();
       renderConfig(cfg);
+      renderScenarioControls();
+      renderOverrideStatus();
     } catch (err) {
       setStatus(err.message, false);
     }
+  }
+
+  function refreshAll() {
+    return loadAll();
   }
 
   function showView(name) {
@@ -377,6 +513,22 @@
   });
   $("copy-curl-button").addEventListener("click", copySelectedCurl);
   $("replay-button").addEventListener("click", replaySelectedEntry);
+  $("scenario-select").addEventListener("change", (event) => {
+    setSelectedScenario(event.target.value).catch((err) => setStatus(err.message, false));
+  });
+  $("scenario-clear").addEventListener("click", () => {
+    setSelectedScenario("").catch((err) => setStatus(err.message, false));
+  });
+  $("override-apply").addEventListener("click", () => {
+    applyRouteOverride().catch((err) => {
+      $("override-status").textContent = String(err.message || err);
+    });
+  });
+  $("override-clear").addEventListener("click", () => {
+    clearRouteOverride().catch((err) => {
+      $("override-status").textContent = String(err.message || err);
+    });
+  });
   $("tester-send").addEventListener("click", () => {
     sendTesterRequest().catch((err) => {
       $("tester-response").textContent = String(err.message || err);

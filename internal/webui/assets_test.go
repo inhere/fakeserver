@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -173,6 +174,46 @@ func TestUIAssets_RouteTesterContracts(t *testing.T) {
 	} {
 		if !strings.Contains(index.Body.String(), want) {
 			t.Fatalf("index missing %q", want)
+		}
+	}
+}
+
+func readAsset(t *testing.T, name string) string {
+	t.Helper()
+	data, err := fs.ReadFile(embeddedAssets, name)
+	if err != nil {
+		t.Fatalf("read asset %s: %v", name, err)
+	}
+	return string(data)
+}
+
+func TestUIAssets_ScenarioControlContracts(t *testing.T) {
+	data := readAsset(t, "assets/index.html")
+	for _, want := range []string{
+		`scenario-select`,
+		`scenario-clear`,
+		`route-override-panel`,
+		`override-case`,
+		`override-mode`,
+		`override-remaining`,
+		`override-apply`,
+		`override-clear`,
+	} {
+		if !strings.Contains(data, want) {
+			t.Fatalf("index missing %q", want)
+		}
+	}
+
+	js := readAsset(t, "assets/main.js")
+	for _, want := range []string{
+		`loadScenarioState`,
+		`setSelectedScenario`,
+		`applyRouteOverride`,
+		`clearRouteOverride`,
+		`/__fakeserver/api/scenario`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Fatalf("main.js missing %q", want)
 		}
 	}
 }
