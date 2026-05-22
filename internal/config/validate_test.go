@@ -162,19 +162,47 @@ func TestValidate_ScenarioUnknownRouteAndCase(t *testing.T) {
 			Method: []string{"GET"},
 			Path:   "/api/users",
 			Cases:  []RouteCase{{Name: "success", Status: 200}},
+		}, {
+			Method: []string{"GET"},
+			Path:   "/api/status",
+			Body:   "ok",
 		}},
 		Scenarios: map[string]ScenarioConfig{
 			"broken": {Routes: map[string]string{
 				"GET /api/missing": "empty",
 				"GET /api/users":   "missingCase",
+				"GET /api/status":  "success",
 			}},
 		},
 	}
 	applyDefaults(cfg)
 
 	errs := Validate(cfg)
-	if len(errs) != 2 {
-		t.Fatalf("expected 2 validation errors, got %d: %v", len(errs), errs)
+	if len(errs) != 3 {
+		t.Fatalf("expected 3 validation errors, got %d: %v", len(errs), errs)
+	}
+	if !containsErrorWith(errs, `route "GET /api/status"`, "has no cases") {
+		t.Fatalf("expected route without cases error, got %v", errs)
+	}
+}
+
+func TestValidate_ServerScenarioUnknown(t *testing.T) {
+	cfg := &Config{
+		Server: ServerOpts{Scenario: "missing"},
+		Routes: []Route{{
+			Method: []string{"GET"},
+			Path:   "/api/users",
+			Cases:  []RouteCase{{Name: "success", Status: 200}},
+		}},
+		Scenarios: map[string]ScenarioConfig{
+			"emptyUsers": {Routes: map[string]string{"GET /api/users": "success"}},
+		},
+	}
+	applyDefaults(cfg)
+
+	errs := Validate(cfg)
+	if !containsErrorWith(errs, `server.scenario "missing"`, "does not exist in scenarios") {
+		t.Fatalf("expected unknown server.scenario error, got %v", errs)
 	}
 }
 
