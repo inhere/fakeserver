@@ -10,19 +10,28 @@ import (
 
 	"github.com/inhere/fakeserver/internal/config"
 	"github.com/inhere/fakeserver/internal/recorder"
+	"github.com/inhere/fakeserver/internal/scenario"
 )
 
 // Mount 注册 webui 端点到 router。
 // 当 cfg.Server.AdminEnabled == false 时整体跳过（design §11.6）。
 // regPath：~/.config/fakeserver/projects.json 的绝对路径，用于 /api/projects。
-func Mount(r *rux.Router, cfg *config.Config, regPath string, ring *recorder.Ring) {
+func Mount(r *rux.Router, cfg *config.Config, regPath string, ring *recorder.Ring, scenarioStores ...*scenario.Store) {
 	if cfg == nil || cfg.Server.AdminEnabled == nil || !*cfg.Server.AdminEnabled {
 		return
+	}
+	var scenarioStore *scenario.Store
+	if len(scenarioStores) > 0 {
+		scenarioStore = scenarioStores[0]
 	}
 	r.GET("/__fakeserver/api/projects", apiProjectsHandler(regPath))
 	r.GET("/__fakeserver/api/config", apiConfigHandler(cfg))
 	r.GET("/__fakeserver/api/history", apiHistoryHandler(ring))
 	r.GET("/__fakeserver/api/history/{id}", apiHistoryDetailHandler(ring))
+	r.GET("/__fakeserver/api/scenario", apiScenarioStateHandler(scenarioStore))
+	r.PUT("/__fakeserver/api/scenario", apiScenarioSetSelectedHandler(scenarioStore))
+	r.PUT("/__fakeserver/api/scenario/overrides", apiScenarioSetOverrideHandler(scenarioStore))
+	r.DELETE("/__fakeserver/api/scenario/overrides", apiScenarioClearOverrideHandler(scenarioStore))
 	r.GET("/__fakeserver/events", sseEventsHandler(ring, defaultHeartbeat))
 	assets := uiAssetsHandler()
 	r.GET("/__fakeserver/ui/", assets)

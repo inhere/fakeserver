@@ -13,6 +13,7 @@ import (
 	"github.com/inhere/fakeserver/internal/config"
 	"github.com/inhere/fakeserver/internal/recorder"
 	"github.com/inhere/fakeserver/internal/registry"
+	"github.com/inhere/fakeserver/internal/scenario"
 )
 
 func boolPtr(v bool) *bool { return &v }
@@ -137,6 +138,144 @@ func TestAPIHistoryDetail_BadID(t *testing.T) {
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/history/nope", nil))
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want 400", w.Code)
+	}
+}
+
+func TestAPIScenarioState(t *testing.T) {
+	t.Run("disabled store returns empty state", func(t *testing.T) {
+		router := rux.New()
+		cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+		Mount(router, cfg, "", recorder.New(10), nil)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/scenario", nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d", w.Code)
+		}
+		var got scenario.State
+		if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Selected != "" || len(got.Overrides) != 0 {
+			t.Fatalf("state=%+v want empty", got)
+		}
+	})
+
+	t.Run("returns selected and overrides", func(t *testing.T) {
+		store := scenario.NewStore()
+		store.SetSelected("emptyUsers")
+		store.SetOverride(scenario.NewRouteKey("GET", "/api/users"), scenario.Override{CaseName: "empty", Mode: "always"})
+
+		router := rux.New()
+		cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+		Mount(router, cfg, "", recorder.New(10), store)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest("GET", "/__fakeserver/api/scenario", nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d", w.Code)
+		}
+		var got scenario.State
+		if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Selected != "emptyUsers" {
+			t.Fatalf("selected=%q want emptyUsers", got.Selected)
+		}
+		if ov := got.Overrides["GET /api/users"]; ov.CaseName != "empty" || ov.Mode != "always" {
+			t.Fatalf("override=%+v want empty always", ov)
+		}
+	})
+}
+
+func TestAPIScenarioSetSelected(t *testing.T) {
+	t.Run("updates selected scenario", func(t *testing.T) {
+		store := scenario.NewStore()
+		router := rux.New()
+		cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+		Mount(router, cfg, "", recorder.New(10), store)
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("PUT", "/__fakeserver/api/scenario", strings.NewReader(`{"selected":"emptyUsers"}`))
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		if got := store.Selected(); got != "emptyUsers" {
+			t.Fatalf("selected=%q want emptyUsers", got)
+		}
+	})
+
+	t.Run("disabled store returns 404", func(t *testing.T) {
+		router := rux.New()
+		cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+		Mount(router, cfg, "", recorder.New(10), nil)
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("PUT", "/__fakeserver/api/scenario", strings.NewReader(`{"selected":"emptyUsers"}`))
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status=%d want 404", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "scenario store disabled") {
+			t.Fatalf("body=%s want disabled error", w.Body.String())
+		}
+	})
+
+	t.Run("invalid json returns 400", func(t *testing.T) {
+		store := scenario.NewStore()
+		router := rux.New()
+		cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+		Mount(router, cfg, "", recorder.New(10), store)
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("PUT", "/__fakeserver/api/scenario", strings.NewReader(`{`))
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d want 400", w.Code)
+		}
+	})
+}
+
+func TestAPIScenarioOverrides(t *testing.T) {
+	store := scenario.NewStore()
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", recorder.New(10), store)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PUT", "/__fakeserver/api/scenario/overrides", strings.NewReader(`{"method":"post","path":"/api/users","caseName":"created","mode":"count","remaining":2}`))
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("PUT status=%d body=%s", w.Code, w.Body.String())
+	}
+	state := store.Snapshot()
+	if ov := state.Overrides["POST /api/users"]; ov.CaseName != "created" || ov.Mode != "count" || ov.Remaining != 2 {
+		t.Fatalf("override=%+v want created count 2", ov)
+	}
+
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest("DELETE", "/__fakeserver/api/scenario/overrides?method=post&path=/api/users", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("DELETE status=%d body=%s", w.Code, w.Body.String())
+	}
+	if len(store.Snapshot().Overrides) != 0 {
+		t.Fatalf("override was not cleared: %+v", store.Snapshot().Overrides)
+	}
+}
+
+func TestAPIScenarioOverrideInvalidMode(t *testing.T) {
+	store := scenario.NewStore()
+	router := rux.New()
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: boolPtr(true)}}
+	Mount(router, cfg, "", recorder.New(10), store)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PUT", "/__fakeserver/api/scenario/overrides", strings.NewReader(`{"method":"GET","path":"/api/users","caseName":"empty","mode":"sometimes"}`))
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want 400", w.Code)
 	}
 }
 

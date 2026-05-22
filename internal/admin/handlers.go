@@ -57,11 +57,24 @@ func routesHandler(cfg *config.Config) rux.HandlerFunc {
 						for ci, cs := range route.Cases {
 							cases[ci] = map[string]any{
 								"index":  ci,
+								"name":   cs.Name,
 								"when":   cs.When,
 								"status": cs.Status,
 							}
 						}
 						item["cases"] = cases
+					}
+					if len(cfg.Scenarios) > 0 {
+						signature := strings.ToUpper(m) + " " + route.Path
+						scenarios := map[string]string{}
+						for name, scenario := range cfg.Scenarios {
+							if caseName, ok := scenario.Routes[signature]; ok {
+								scenarios[name] = caseName
+							}
+						}
+						if len(scenarios) > 0 {
+							item["scenarios"] = scenarios
+						}
 					}
 					if route.Proxy != nil {
 						item["proxyTarget"] = route.Proxy.Target

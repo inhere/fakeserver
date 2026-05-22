@@ -145,6 +145,58 @@ func TestRoutesHandler_IncludesDebugMetadata(t *testing.T) {
 	}
 }
 
+func TestRoutesHandler_IncludesCaseNamesAndScenarioCases(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{
+			{
+				Method: []string{"get"},
+				Path:   "/api/users",
+				Cases: []config.RouteCase{
+					{Name: "success", Status: 200},
+					{Name: "empty", Status: 200},
+				},
+			},
+		},
+		Scenarios: map[string]config.ScenarioConfig{
+			"emptyUsers": {Routes: map[string]string{"GET /api/users": "empty"}},
+		},
+	}
+
+	r := rux.New()
+	admin.Mount(r, cfg)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/__fakeserver/routes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d want 1", len(got))
+	}
+	cases := got[0]["cases"].([]any)
+	firstName, _ := cases[0].(map[string]any)["name"].(string)
+	if firstName != "success" {
+		t.Fatalf("first case name=%q want success; case=%v", firstName, cases[0])
+	}
+	secondName, _ := cases[1].(map[string]any)["name"].(string)
+	if secondName != "empty" {
+		t.Fatalf("second case name=%q want empty; case=%v", secondName, cases[1])
+	}
+	scenarios, ok := got[0]["scenarios"].(map[string]any)
+	if !ok {
+		t.Fatalf("scenarios missing or wrong type: %v", got[0]["scenarios"])
+	}
+	if gotCase, _ := scenarios["emptyUsers"].(string); gotCase != "empty" {
+		t.Fatalf("scenarios=%v want emptyUsers -> empty", scenarios)
+	}
+}
+
 func TestAdmin_RoutesEmptyConfig(t *testing.T) {
 	r := rux.New()
 	admin.Mount(r, nil)

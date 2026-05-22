@@ -93,7 +93,7 @@ func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOption
 	_ = proxy.Mount(r, cfg, renderer)
 	if adminOn(cfg) {
 		admin.Mount(r, cfg)
-		webui.Mount(r, cfg, userRegistryPath(), ring)
+		webui.Mount(r, cfg, userRegistryPath(), ring, scenarioStore)
 	} else {
 		// design §11.6：adminEnabled=false → 所有 /__fakeserver/* 端点不挂载，
 		// UI 也不可达。注册一个明确的 404 catch-all 阻断 echo 兜底。
