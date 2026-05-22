@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math"
 	"testing"
+
+	"github.com/inhere/fakeserver/internal/config"
 )
 
 func makeCases(weights ...int) []SelectorCase {
@@ -12,6 +14,20 @@ func makeCases(weights ...int) []SelectorCase {
 		out[i] = SelectorCase{OrigIdx: i, Weight: w}
 	}
 	return out
+}
+
+func TestPickCaseByName(t *testing.T) {
+	cases := []config.RouteCase{
+		{Name: "success"},
+		{Name: "empty"},
+	}
+	idx, ok := pickCaseByName(cases, "empty")
+	if !ok || idx != 1 {
+		t.Fatalf("pick empty = %d ok=%v", idx, ok)
+	}
+	if _, ok := pickCaseByName(cases, "missing"); ok {
+		t.Fatal("missing case should not match")
+	}
 }
 
 func TestSelector_Empty_ReturnsErrNoMatch(t *testing.T) {

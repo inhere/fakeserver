@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math/rand"
 	"sync/atomic"
+
+	"github.com/inhere/fakeserver/internal/config"
 )
 
 // ErrNoMatch indicates Selector.Pick was called with an empty case set.
@@ -48,6 +50,18 @@ func NewSelector(strategy string) Selector {
 	default:
 		return &randomSelector{}
 	}
+}
+
+func pickCaseByName(cases []config.RouteCase, name string) (int, bool) {
+	if name == "" {
+		return 0, false
+	}
+	for i := range cases {
+		if cases[i].Name == name {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 type randomSelector struct{}

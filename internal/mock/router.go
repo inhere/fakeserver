@@ -7,8 +7,14 @@ import (
 	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/config"
+	"github.com/inhere/fakeserver/internal/scenario"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
+
+type RuntimeOptions struct {
+	ScenarioStore *scenario.Store
+	CLIScenario   string
+}
 
 // Mount registers mock routes (single-response and cases) onto r. Routes
 // with proxy{} are skipped — proxy.Mount handles them.
@@ -23,6 +29,10 @@ import (
 // (Validate normally catches these — this is defense-in-depth so the
 // router never silently registers a half-broken route).
 func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
+	return MountWithRuntime(r, cfg, renderer, RuntimeOptions{})
+}
+
+func MountWithRuntime(r *rux.Router, cfg *config.Config, renderer tpl.Renderer, runtime RuntimeOptions) error {
 	if cfg == nil {
 		return nil
 	}
@@ -46,7 +56,7 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 			}
 			selector := NewSelector(route.Strategy)
 			handler = func(c *rux.Context) {
-				RespondCases(c, route, routeIndex, matchers, selector, renderer, envMap)
+				RespondCasesWithScenario(c, cfg, route, routeIndex, matchers, selector, renderer, envMap, runtime.ScenarioStore, runtime.CLIScenario)
 			}
 		} else {
 			handler = func(c *rux.Context) {

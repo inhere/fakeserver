@@ -14,6 +14,7 @@ import (
 
 	"github.com/inhere/fakeserver/internal/config"
 	"github.com/inhere/fakeserver/internal/recorder"
+	"github.com/inhere/fakeserver/internal/scenario"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
@@ -43,6 +44,131 @@ func startCasesServer(t *testing.T, route *config.Route, renderer tpl.Renderer) 
 		}
 	}
 	return httptest.NewServer(r)
+}
+
+func mustMatcher(t *testing.T, expr string) *Matcher {
+	t.Helper()
+	m, err := CompileMatcher(expr)
+	if err != nil {
+		t.Fatalf("CompileMatcher(%q): %v", expr, err)
+	}
+	return m
+}
+
+func TestRespondCases_UsesScenarioCase(t *testing.T) {
+	route := &config.Route{
+		Method:   []string{"GET"},
+		Path:     "/api/users",
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{Name: "success", Status: 200, Body: map[string]any{"state": "success"}},
+			{Name: "empty", Status: 200, Body: map[string]any{"state": "empty"}},
+		},
+	}
+	cfg := &config.Config{
+		Server: config.ServerOpts{Scenario: "emptyUsers"},
+		Scenarios: map[string]config.ScenarioConfig{
+			"emptyUsers": {Routes: map[string]string{"GET /api/users": "empty"}},
+		},
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/users", nil)
+	ctx, trace := recorder.WithRequestTrace(req.Context())
+	req = req.WithContext(ctx)
+	c := &rux.Context{Req: req, Resp: rec}
+
+	RespondCasesWithScenario(c, cfg, route, 0, []*Matcher{mustMatcher(t, ""), mustMatcher(t, "")}, NewSelector("first-match"), tpl.NewRenderer(nil, nil, 0), nil, nil, "")
+
+	if !strings.Contains(rec.Body.String(), `"state":"empty"`) {
+		t.Fatalf("scenario case response = %s", rec.Body.String())
+	}
+	if trace.CaseName != "empty" || trace.Scenario != "emptyUsers" || trace.OverrideSource != "config" {
+		t.Fatalf("trace = %#v", trace)
+	}
+}
+
+func TestRespondCases_HeaderScenarioBeatsConfigScenario(t *testing.T) {
+	route := &config.Route{
+		Method:   []string{"GET"},
+		Path:     "/api/users",
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{Name: "success", Status: 200, Body: map[string]any{"state": "success"}},
+			{Name: "empty", Status: 200, Body: map[string]any{"state": "empty"}},
+			{Name: "error", Status: 500, Body: map[string]any{"state": "error"}},
+		},
+	}
+	cfg := &config.Config{
+		Server: config.ServerOpts{Scenario: "emptyUsers"},
+		Scenarios: map[string]config.ScenarioConfig{
+			"emptyUsers": {Routes: map[string]string{"GET /api/users": "empty"}},
+			"errorUsers": {Routes: map[string]string{"GET /api/users": "error"}},
+		},
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/users", nil)
+	req.Header.Set(scenario.HeaderName, "errorUsers")
+	ctx, trace := recorder.WithRequestTrace(req.Context())
+	req = req.WithContext(ctx)
+	c := &rux.Context{Req: req, Resp: rec}
+
+	RespondCasesWithScenario(c, cfg, route, 0, []*Matcher{mustMatcher(t, ""), mustMatcher(t, ""), mustMatcher(t, "")}, NewSelector("first-match"), tpl.NewRenderer(nil, nil, 0), nil, nil, "")
+
+	if rec.Code != 500 || !strings.Contains(rec.Body.String(), `"state":"error"`) {
+		t.Fatalf("header scenario response code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if trace.CaseName != "error" || trace.Scenario != "errorUsers" || trace.OverrideSource != "header" {
+		t.Fatalf("trace = %#v", trace)
+	}
+}
+
+func TestRespondCases_OverrideNextBeatsScenarioAndConsumes(t *testing.T) {
+	route := &config.Route{
+		Method:   []string{"GET"},
+		Path:     "/api/users",
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{Name: "success", Status: 200, Body: map[string]any{"state": "success"}},
+			{Name: "empty", Status: 200, Body: map[string]any{"state": "empty"}},
+			{Name: "error", Status: 500, Body: map[string]any{"state": "error"}},
+		},
+	}
+	cfg := &config.Config{
+		Server: config.ServerOpts{Scenario: "emptyUsers"},
+		Scenarios: map[string]config.ScenarioConfig{
+			"emptyUsers": {Routes: map[string]string{"GET /api/users": "empty"}},
+		},
+	}
+	store := scenario.NewStore()
+	store.SetOverride(scenario.NewRouteKey("GET", "/api/users"), scenario.Override{CaseName: "error", Mode: "next"})
+	matchers := []*Matcher{mustMatcher(t, ""), mustMatcher(t, ""), mustMatcher(t, "")}
+	renderer := tpl.NewRenderer(nil, nil, 0)
+
+	firstRec := httptest.NewRecorder()
+	firstReq := httptest.NewRequest("GET", "/api/users", nil)
+	firstCtx, firstTrace := recorder.WithRequestTrace(firstReq.Context())
+	firstReq = firstReq.WithContext(firstCtx)
+	RespondCasesWithScenario(&rux.Context{Req: firstReq, Resp: firstRec}, cfg, route, 0, matchers, NewSelector("first-match"), renderer, nil, store, "")
+
+	if firstRec.Code != 500 || !strings.Contains(firstRec.Body.String(), `"state":"error"`) {
+		t.Fatalf("override response code=%d body=%s", firstRec.Code, firstRec.Body.String())
+	}
+	if firstTrace.CaseName != "error" || firstTrace.OverrideSource != "override:next" || firstTrace.Scenario != "emptyUsers" {
+		t.Fatalf("first trace = %#v", firstTrace)
+	}
+
+	secondRec := httptest.NewRecorder()
+	secondReq := httptest.NewRequest("GET", "/api/users", nil)
+	secondCtx, secondTrace := recorder.WithRequestTrace(secondReq.Context())
+	secondReq = secondReq.WithContext(secondCtx)
+	RespondCasesWithScenario(&rux.Context{Req: secondReq, Resp: secondRec}, cfg, route, 0, matchers, NewSelector("first-match"), renderer, nil, store, "")
+
+	if !strings.Contains(secondRec.Body.String(), `"state":"empty"`) {
+		t.Fatalf("scenario response after consume = %s", secondRec.Body.String())
+	}
+	if secondTrace.CaseName != "empty" || secondTrace.OverrideSource != "config" || secondTrace.Scenario != "emptyUsers" {
+		t.Fatalf("second trace = %#v", secondTrace)
+	}
 }
 
 func TestRespondCases_SetsCaseTrace(t *testing.T) {

@@ -8,6 +8,8 @@ import (
 	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/config"
+	"github.com/inhere/fakeserver/internal/recorder"
+	"github.com/inhere/fakeserver/internal/scenario"
 	"github.com/inhere/fakeserver/internal/tpl"
 )
 
@@ -34,7 +36,45 @@ import (
 // the parsed body), but case body/headers templates cannot. Phase 5 may
 // revisit this with an explicit context.WithValue or body-buffering layer.
 func RespondCases(c *rux.Context, route *config.Route, routeIndex int, matchers []*Matcher, selector Selector, renderer tpl.Renderer, envMap map[string]any) {
+	RespondCasesWithScenario(c, nil, route, routeIndex, matchers, selector, renderer, envMap, nil, "")
+}
+
+func RespondCasesWithScenario(
+	c *rux.Context,
+	cfg *config.Config,
+	route *config.Route,
+	routeIndex int,
+	matchers []*Matcher,
+	selector Selector,
+	renderer tpl.Renderer,
+	envMap map[string]any,
+	scenarioStore *scenario.Store,
+	cliScenario string,
+) {
+	scenarioName, scenarioSource := scenario.Resolve(c.Req, scenarioStore, cfg, cliScenario)
+	routeKey := scenario.NewRouteKey(firstMethod(route), route.Path)
 	recordRouteTrace(c, route, routeIndex, "cases", nil)
+
+	if scenarioStore != nil {
+		if ov, ok := scenarioStore.ConsumeOverride(routeKey); ok {
+			if idx, found := pickCaseByName(route.Cases, ov.CaseName); found {
+				respondPickedCase(c, route, routeIndex, idx, "override:"+ov.Mode, scenarioName, renderer, envMap)
+				return
+			}
+		}
+	}
+
+	if scenarioName != "" && cfg != nil {
+		if sc, ok := cfg.Scenarios[scenarioName]; ok {
+			if caseName := sc.Routes[routeKey.String()]; caseName != "" {
+				if idx, found := pickCaseByName(route.Cases, caseName); found {
+					respondPickedCase(c, route, routeIndex, idx, scenarioSource, scenarioName, renderer, envMap)
+					return
+				}
+			}
+		}
+	}
+
 	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil, envMap)
 
 	filtered := make([]SelectorCase, 0, len(route.Cases))
@@ -60,10 +100,29 @@ func RespondCases(c *rux.Context, route *config.Route, routeIndex int, matchers 
 		return
 	}
 
-	chosen := &route.Cases[pickedIdx]
-	recordRouteTrace(c, route, routeIndex, "cases", &pickedIdx)
+	respondPickedCase(c, route, routeIndex, pickedIdx, "strategy", scenarioName, renderer, envMap)
+}
+
+func respondPickedCase(c *rux.Context, route *config.Route, routeIndex int, caseIndex int, source string, scenarioName string, renderer tpl.Renderer, envMap map[string]any) {
+	chosen := &route.Cases[caseIndex]
+	recorder.SetRouteMatch(c.Req.Context(), recorder.RequestTrace{
+		RouteIndex:     &routeIndex,
+		CaseIndex:      &caseIndex,
+		RouteMode:      "cases",
+		RouteSource:    route.SourceFile,
+		Scenario:       scenarioName,
+		CaseName:       chosen.Name,
+		OverrideSource: source,
+	})
 	virtual := caseAsRoute(route, chosen)
-	respondWithTrace(c, virtual, routeIndex, "cases", &pickedIdx, renderer, envMap)
+	respondWithTrace(c, virtual, routeIndex, "cases", &caseIndex, renderer, envMap)
+}
+
+func firstMethod(route *config.Route) string {
+	if route == nil || len(route.Method) == 0 {
+		return ""
+	}
+	return route.Method[0]
 }
 
 // caseAsRoute composes a virtual single-response Route by overlaying the
