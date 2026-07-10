@@ -9,11 +9,7 @@ import (
 )
 
 // TestWithLock_SerializesGoroutines_LowContention 在低竞争场景验证 WithLock
-// 真正串行化（goroutine 数小、临界区短，5 次重试退避总预算 310ms 足以覆盖）。
-//
-// design §10.3 明确"上锁失败重试 5 次（10ms~160ms 退避），仍失败仅 warn 不阻塞"
-// ——所以高竞争场景的串行性是放弃的契约（warn 路径会同时放行多个 caller）。
-// 高竞争的"不阻塞"契约由 TestWithLock_HighContention_DoesNotBlock 覆盖。
+// 真正串行化。
 func TestWithLock_SerializesGoroutines_LowContention(t *testing.T) {
 	d := t.TempDir()
 	lockPath := filepath.Join(d, "lock")
@@ -51,13 +47,13 @@ func TestWithLock_SerializesGoroutines_LowContention(t *testing.T) {
 	}
 }
 
-// TestWithLock_HighContention_DoesNotBlock 验证 design §10.3 "仍失败仅 warn 不阻塞"
-// ——即使高竞争超出 5 次重试预算，所有 caller 仍能完成（warn 路径放行）。
-func TestWithLock_HighContention_DoesNotBlock(t *testing.T) {
+// TestWithLock_SerializesGoroutines_HighContention 验证锁竞争不能绕过锁进入
+// deserialize → modify → serialize 临界区，否则跨进程 registry 写入会丢更新。
+func TestWithLock_SerializesGoroutines_HighContention(t *testing.T) {
 	d := t.TempDir()
 	lockPath := filepath.Join(d, "lock")
 
-	const N = 30
+	const N = 8
 	var (
 		inside int32
 		maxIn  int32
@@ -76,17 +72,17 @@ func TestWithLock_HighContention_DoesNotBlock(t *testing.T) {
 						break
 					}
 				}
-				time.Sleep(50 * time.Millisecond) // 故意超出 5 次退避总预算
+				time.Sleep(80 * time.Millisecond)
 				return nil
 			})
 			if err != nil {
-				t.Errorf("WithLock should never error in fallback path: %v", err)
+				t.Errorf("WithLock: %v", err)
 			}
 		}()
 	}
 	wg.Wait()
-	if maxIn <= 1 {
-		t.Errorf("max concurrent inside high-contention lock = %d, want > 1 (fallback should not serialize)", maxIn)
+	if maxIn > 1 {
+		t.Errorf("max concurrent inside high-contention lock = %d, want 1", maxIn)
 	}
 }
 
