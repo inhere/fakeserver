@@ -41,9 +41,28 @@ run: build
 # ─── Cross Compilation ────────────────────────────────────────────────────────
 
 DIST_DIR := dist
+DESCRIPTION := "Configurable HTTP mock/fake server"
 
 ## build-all: cross-compile for all platforms
-build-all: build-linux build-linux-arm64 build-darwin build-darwin-arm64 build-windows
+build-all: clean-dist dump-info build-linux build-linux-arm64 build-darwin build-darwin-arm64 build-windows latest-yaml
+
+## dump-info: dump build info
+dump-info:
+	@echo "Build Info:"
+	@echo "  VERSION: $(VERSION)"
+	@echo "  GIT_HASH: $(GIT_HASH)"
+	@echo "  BUILD_TIME: $(BUILD_TIME)"
+
+## latest-yaml: generate latest.yaml release metadata
+latest-yaml:
+	@mkdir -p $(DIST_DIR)
+	@{ \
+		echo "name: $(APP)"; \
+		echo "version: $(VERSION)"; \
+		echo "released_at: $(BUILD_TIME)"; \
+		echo "description: $(DESCRIPTION)"; \
+	} > $(DIST_DIR)/latest.yaml
+	@echo "   → $(DIST_DIR)/latest.yaml"
 
 ## build-linux: compile for Linux amd64
 build-linux:
@@ -104,6 +123,12 @@ clean:
 	@rm -f $(BINARY)
 	@rm -rf $(DIST_DIR)
 	@echo "🧹 Cleaned"
+
+## clean-dist: remove old dist files
+clean-dist:
+	@rm -rf $(DIST_DIR)
+	@mkdir -p $(DIST_DIR)
+	@echo "🧹 Cleaned $(DIST_DIR)"
 
 ## help: show this help
 help:

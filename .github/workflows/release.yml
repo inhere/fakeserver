@@ -58,8 +58,4 @@ jobs:
           body_path: changelog.md
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            dist/fakeserver-darwin-amd64
-            dist/fakeserver-darwin-arm64
-            dist/fakeserver-linux-amd64
-            dist/fakeserver-linux-arm64
-            dist/fakeserver-windows-amd64.exe
+            dist/*
