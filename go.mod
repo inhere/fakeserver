@@ -6,16 +6,16 @@ require (
 	github.com/brianvoe/gofakeit/v7 v7.15.0
 	github.com/expr-lang/expr v1.17.8
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/easytpl v1.1.1
 	github.com/gookit/gcli/v3 v3.3.1
-	github.com/gookit/goutil v0.7.5
+	github.com/gookit/goutil v0.8.0
 	github.com/gookit/rux/v2 v2.0.0
 	github.com/titanous/json5 v1.0.0
 )
 
 require (
-	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/gookit/cliui v0.2.3 // indirect
 	github.com/gookit/color v1.6.1 // indirect
 	github.com/gookit/filter v1.2.3 // indirect
