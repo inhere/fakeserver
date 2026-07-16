@@ -9,7 +9,7 @@ require (
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/easytpl v1.1.1
-	github.com/gookit/gcli/v3 v3.8.1
+	github.com/gookit/gcli/v3 v3.8.3
 	github.com/gookit/goutil v0.8.0
 	github.com/gookit/rux/v2 v2.0.2
 	github.com/titanous/json5 v1.0.0
