@@ -42,17 +42,46 @@ type serveOptions struct {
 	VarOverrides gcli.Strings // --var key=val (multi-flag accumulating; CSV inside single flag allowed)
 }
 
-func newServeCmd() *gcli.Command {
-	opts := serveOptions{
-		Port: 5090,
-		Host: "0.0.0.0",
+const (
+	defaultListenHost = "0.0.0.0"
+	defaultListenPort = 5090
+)
+
+func resolveListenAddr(cfg *config.Config, opts serveOptions) (string, int) {
+	host, port := defaultListenHost, defaultListenPort
+	if cfg != nil {
+		if cfg.Server.Host != "" {
+			host = cfg.Server.Host
+		}
+		if cfg.Server.Port != 0 {
+			port = cfg.Server.Port
+		}
 	}
+	if opts.Host != "" {
+		host = opts.Host
+	}
+	if opts.Port != 0 {
+		port = opts.Port
+	}
+	return host, port
+}
+
+func listenAddrReloadWarning(curHost string, curPort int, newCfg *config.Config, opts serveOptions) string {
+	newHost, newPort := resolveListenAddr(newCfg, opts)
+	if newHost == curHost && newPort == curPort {
+		return ""
+	}
+	return fmt.Sprintf("warn: config now resolves listen address to %s:%d, still listening on %s:%d; restart to apply", newHost, newPort, curHost, curPort)
+}
+
+func newServeCmd() *gcli.Command {
+	opts := serveOptions{}
 	c := &gcli.Command{
 		Name: "serve",
 		Desc: "Start the fakeserver HTTP server",
 		Config: func(cmd *gcli.Command) {
-			cmd.IntOpt2(&opts.Port, "port,p", "Listening port")
-			cmd.StrOpt2(&opts.Host, "host", "Listening host")
+			cmd.IntOpt2(&opts.Port, "port,p", "Listening port (default: config server.port, else 5090)")
+			cmd.StrOpt2(&opts.Host, "host", "Listening host (default: config server.host, else 0.0.0.0)")
 			cmd.StrOpt2(&opts.ConfigFlag, "config,c", "Comma-separated config paths (default: search CWD)")
 			cmd.BoolOpt2(&opts.Quiet, "quiet,q", "Suppress request access log")
 			cmd.BoolOpt2(&opts.NoCORS, "no-cors", "Disable CORS middleware")
@@ -264,7 +293,8 @@ func runServe(opts serveOptions) error {
 		}
 	}
 
-	addr := fmt.Sprintf("%s:%d", opts.Host, opts.Port)
+	listenHost, listenPort := resolveListenAddr(cfg, opts)
+	addr := fmt.Sprintf("%s:%d", listenHost, listenPort)
 
 	var (
 		globals map[string]any
@@ -288,8 +318,8 @@ func runServe(opts serveOptions) error {
 	scenarioStore := scenario.NewStore()
 
 	// v0.4 Phase 1：0.0.0.0 + adminEnabled 组合发 WARNING（design §11.6）。
-	if cfg != nil && cfg.Server.Host == "0.0.0.0" && cfg.Server.AdminEnabled != nil && *cfg.Server.AdminEnabled {
-		fmt.Fprintln(os.Stderr, "WARNING: server.host=0.0.0.0 with adminEnabled=true exposes admin endpoints publicly")
+	if listenHost == "0.0.0.0" && cfg != nil && cfg.Server.AdminEnabled != nil && *cfg.Server.AdminEnabled {
+		fmt.Fprintln(os.Stderr, "WARNING: listening on 0.0.0.0 with adminEnabled=true exposes admin endpoints to the network")
 	}
 
 	holder := middleware.NewHolder()
@@ -317,6 +347,9 @@ func runServe(opts serveOptions) error {
 				fmt.Fprintln(os.Stderr, "warn (reload):", w)
 			}
 			newRenderer := tpl.NewRenderer(newCfg.Globals, newCfg.Server.OSEnvWhitelist, newCfg.Server.FakerSeed)
+			if warning := listenAddrReloadWarning(listenHost, listenPort, newCfg, opts); warning != "" {
+				fmt.Fprintln(os.Stderr, warning)
+			}
 			holder.Swap(assembleHandler(newCfg, newRenderer, opts, ring, scenarioStore))
 			emitRouteReload(ring, currentCfg, newCfg)
 			currentCfg = newCfg
@@ -357,7 +390,7 @@ func runServe(opts serveOptions) error {
 			CWD:        cwd,
 			Envs:       config.ExtractEnvNames(envFilePath),
 			LastEnv:    opts.EnvName,
-			LastPort:   opts.Port,
+			LastPort:   listenPort,
 			LastRunAt:  time.Now().UTC(),
 			PIDFile:    pidPath,
 		}
@@ -372,7 +405,7 @@ func runServe(opts serveOptions) error {
 		}); rerr != nil {
 			fmt.Fprintf(os.Stderr, "warn: registry write failed: %v\n", rerr)
 		}
-		if werr := registry.WritePIDFile(pidPath, os.Getpid(), opts.Port, proj.LastRunAt); werr != nil {
+		if werr := registry.WritePIDFile(pidPath, os.Getpid(), listenPort, proj.LastRunAt); werr != nil {
 			fmt.Fprintf(os.Stderr, "warn: write pid file %s: %v\n", pidPath, werr)
 		}
 		defer func() {
