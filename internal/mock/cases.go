@@ -28,13 +28,6 @@ import (
 // matchers must be parallel to route.Cases (one Matcher per case, even for
 // cases without a when clause — the empty Matcher matches unconditionally).
 // selector is owned by the caller (one per route).
-//
-// Known limitation (Phase 4 boundary): BuildRenderCtx reads req.Body. After
-// this call req.Body is drained but BuildRenderCtx caches bodyRaw, so the
-// second call inside Respond will see an empty body. The practical effect:
-// when-expressions CAN reference .request.body (they execute first and see
-// the parsed body), but case body/headers templates cannot. Phase 5 may
-// revisit this with an explicit context.WithValue or body-buffering layer.
 func RespondCases(c *rux.Context, route *config.Route, routeIndex int, matchers []*Matcher, selector Selector, renderer tpl.Renderer, envMap map[string]any) {
 	RespondCasesWithScenario(c, nil, route, routeIndex, matchers, selector, renderer, envMap, nil, "")
 }
@@ -52,13 +45,14 @@ func RespondCasesWithScenario(
 	cliScenario string,
 ) {
 	scenarioName, scenarioSource := scenario.Resolve(c.Req, scenarioStore, cfg, cliScenario)
+	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil, envMap)
 	routeKey := scenario.NewRouteKey(c.Req.Method, route.Path)
 	recordRouteTrace(c, route, routeIndex, "cases", nil)
 
 	if scenarioStore != nil {
 		if ov, ok := scenarioStore.ConsumeOverride(routeKey); ok {
 			if idx, found := pickCaseByName(route.Cases, ov.CaseName); found {
-				respondPickedCase(c, route, routeIndex, idx, "override:"+ov.Mode, scenarioName, renderer, envMap)
+				respondPickedCase(c, route, routeIndex, idx, "override:"+ov.Mode, scenarioName, renderer, envMap, ctx)
 				return
 			}
 		}
@@ -68,14 +62,12 @@ func RespondCasesWithScenario(
 		if sc, ok := cfg.Scenarios[scenarioName]; ok {
 			if caseName := sc.Routes[routeKey.String()]; caseName != "" {
 				if idx, found := pickCaseByName(route.Cases, caseName); found {
-					respondPickedCase(c, route, routeIndex, idx, scenarioSource, scenarioName, renderer, envMap)
+					respondPickedCase(c, route, routeIndex, idx, scenarioSource, scenarioName, renderer, envMap, ctx)
 					return
 				}
 			}
 		}
 	}
-
-	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil, envMap)
 
 	filtered := make([]SelectorCase, 0, len(route.Cases))
 	for i, m := range matchers {
@@ -100,10 +92,10 @@ func RespondCasesWithScenario(
 		return
 	}
 
-	respondPickedCase(c, route, routeIndex, pickedIdx, "strategy", scenarioName, renderer, envMap)
+	respondPickedCase(c, route, routeIndex, pickedIdx, "strategy", scenarioName, renderer, envMap, ctx)
 }
 
-func respondPickedCase(c *rux.Context, route *config.Route, routeIndex int, caseIndex int, source string, scenarioName string, renderer tpl.Renderer, envMap map[string]any) {
+func respondPickedCase(c *rux.Context, route *config.Route, routeIndex int, caseIndex int, source string, scenarioName string, renderer tpl.Renderer, envMap map[string]any, ctx map[string]any) {
 	chosen := &route.Cases[caseIndex]
 	recorder.SetRouteMatch(c.Req.Context(), recorder.RequestTrace{
 		RouteIndex:     &routeIndex,
@@ -115,7 +107,7 @@ func respondPickedCase(c *rux.Context, route *config.Route, routeIndex int, case
 		OverrideSource: source,
 	})
 	virtual := caseAsRoute(route, chosen)
-	respondWithTrace(c, virtual, routeIndex, "cases", &caseIndex, renderer, envMap)
+	respondWithTrace(c, virtual, routeIndex, "cases", &caseIndex, renderer, envMap, ctx)
 }
 
 // caseAsRoute composes a virtual single-response Route by overlaying the
