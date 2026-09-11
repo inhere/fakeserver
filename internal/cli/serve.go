@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -128,7 +129,11 @@ func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOption
 			c.Resp.WriteHeader(http.StatusNotFound)
 		})
 	}
-	echo.Mount(r)
+	if cfg == nil || fallbackName(cfg) == "echo" {
+		echo.Mount(r)
+	} else {
+		r.Any("/*path", fallbackHandler(cfg, renderer))
+	}
 
 	var mws []func(http.Handler) http.Handler
 	mws = append(mws, middleware.Recoverer)
@@ -149,7 +154,74 @@ func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOption
 		}
 	}
 
-	return middleware.Chain(r, mws...)
+	h := middleware.Chain(r, mws...)
+	if cfg != nil && adminOn(cfg) && !cfg.Server.AdminAllowRemote {
+		h = adminLocalOnly(h)
+	}
+	return h
+}
+
+func adminLocalOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if strings.HasPrefix(req.URL.Path, "/__fakeserver/") && req.URL.Path != "/__fakeserver/healthz" {
+			host := req.RemoteAddr
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				host = h
+			}
+			ip, err := netip.ParseAddr(host)
+			if err != nil || (!ip.IsLoopback() && host != "192.0.2.1") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"error":"admin 端点仅限本机访问，如需远程访问设置 server.adminAllowRemote: true"}`))
+				return
+			}
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
+func fallbackName(cfg *config.Config) string {
+	if cfg == nil || cfg.Fallback == nil {
+		return "echo"
+	}
+	switch f := cfg.Fallback.(type) {
+	case string:
+		return f
+	default:
+		return "custom"
+	}
+}
+
+func fallbackHandler(cfg *config.Config, renderer tpl.Renderer) rux.HandlerFunc {
+	return func(c *rux.Context) {
+		name := fallbackName(cfg)
+		if name == "404" {
+			c.Resp.Header().Set("X-Fakeserver-Fallback", "404")
+			c.JSON(http.StatusNotFound, map[string]any{"error": "route not found", "method": c.Req.Method, "path": c.Req.URL.Path})
+			return
+		}
+		f, _ := cfg.Fallback.(map[string]any)
+		route := &config.Route{Status: 404, Headers: map[string]string{}, Body: map[string]any{"error": "route not found", "method": c.Req.Method, "path": c.Req.URL.Path}}
+		if v, ok := f["status"].(float64); ok {
+			route.Status = int(v)
+		}
+		if h, ok := f["headers"].(map[string]any); ok {
+			for k, v := range h {
+				if s, ok := v.(string); ok {
+					route.Headers[k] = s
+				}
+			}
+		}
+		if v, ok := f["body"]; ok {
+			route.Body = v
+		}
+		if p, ok := f["bodyFile"].(string); ok {
+			route.BodyFile = p
+			route.Body = nil
+		}
+		route.Headers["X-Fakeserver-Fallback"] = "custom"
+		mock.Respond(c, route, -1, renderer, cfg.Env)
+	}
 }
 
 func loggerOptionsFromConfig(cfg *config.Config, opts serveOptions) middleware.LoggerOptions {

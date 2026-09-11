@@ -171,9 +171,10 @@ func validOverrideMode(mode string) bool {
 // 避免修改原对象 + 避免 json:"-" 字段污染输出。
 func redactConfig(cfg *config.Config) map[string]any {
 	out := map[string]any{
-		"server":  cfg.Server,
-		"globals": cfg.Globals,
-		"routes":  cfg.Routes,
+		"server":   cfg.Server,
+		"fallback": cfg.Fallback,
+		"globals":  cfg.Globals,
+		"routes":   cfg.Routes,
 	}
 	if cfg.Env != nil {
 		out["env"] = redactMap(cfg.Env)

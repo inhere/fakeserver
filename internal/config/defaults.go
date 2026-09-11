@@ -43,7 +43,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.HistorySize == 0 {
 		cfg.Server.HistorySize = 200
 	}
-	if cfg.Fallback == "" {
+	if cfg.Fallback == nil || cfg.Fallback == "" {
 		cfg.Fallback = "echo"
 	}
 	if cfg.Scenarios == nil {

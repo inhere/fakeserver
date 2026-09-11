@@ -54,11 +54,30 @@ func printBanner(w io.Writer, cfg *config.Config, version, addr string) {
 			extra = 0
 		}
 	}
-	fmt.Fprintf(w, "│  ui:          %s\n", bannerUIURL(cfg, addr))
+	ui := bannerUIURL(cfg, addr)
+	if cfg.Server.Host == "0.0.0.0" && !cfg.Server.AdminAllowRemote {
+		ui += " (仅限本机访问)"
+	}
+	fmt.Fprintf(w, "│  ui:          %s\n", ui)
 	fmt.Fprintf(w, "│  config:      %s (+%d includes)\n", primary, extra)
-	fmt.Fprintf(w, "│  routes:      %d mock, %d cases, %d proxy, fallback=%s\n", mockN, casesN, proxyN, cfg.Fallback)
+	fmt.Fprintf(w, "│  routes:      %d mock, %d cases, %d proxy, fallback=%s\n", mockN, casesN, proxyN, bannerFallback(cfg))
 	fmt.Fprintf(w, "│  env:         %s\n", bannerEnv(cfg))
 	fmt.Fprintln(w, "╰─")
+}
+
+func bannerFallback(cfg *config.Config) string {
+	switch f := cfg.Fallback.(type) {
+	case string:
+		return f
+	case map[string]any:
+		status := 404
+		if v, ok := f["status"].(float64); ok {
+			status = int(v)
+		}
+		return fmt.Sprintf("custom(%d)", status)
+	default:
+		return "echo"
+	}
 }
 
 func bannerUIURL(cfg *config.Config, addr string) string {

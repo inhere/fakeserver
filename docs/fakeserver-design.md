@@ -249,7 +249,7 @@ func (r *Ring) Subscribe() (<-chan Entry, func())
   },
 
   // ── 默认行为 ──
-  fallback: "echo",         // "echo" | "404"  无路由匹配时的兜底，默认 echo
+  fallback: "echo",         // "echo" | "404" | { status, headers, body/bodyFile }
 
   // ── 路由列表 ──
   routes: [
@@ -749,7 +749,7 @@ func Mount(r *rux.Router) {
 }
 ```
 
-**有路由配置时**：fallback 默认仍是 echo，便于"配置了 /users 但顺便 curl /anything 看请求被收到啥样"这类调试。显式 `fallback: "404"` 关闭。
+**有路由配置时**：fallback 默认仍是 echo，便于调试。显式 `fallback: "404"` 返回 404 JSON（含 method/path）；也可使用对象形式自定义状态、响应头和模板 body。所有兜底响应带 `X-Fakeserver-Fallback: echo|404|custom`。
 
 > 启动时探测 rux/server 子包实际导出符号；若 API 名不一致，做薄适配层，不复制实现。
 
@@ -765,7 +765,7 @@ func Mount(r *rux.Router) {
 | `GET /__fakeserver/api/history` | v0.4 | 最近 N 条请求 |
 | `GET /__fakeserver/events` | v0.4 | SSE 实时请求流 |
 
-`server.adminEnabled: false` 关闭全部 `/__fakeserver/*` 端点（含 ui）。
+`server.adminEnabled: false` 关闭全部 `/__fakeserver/*` 端点（含 ui）。`server.adminAllowRemote` 默认 false，非回环来源访问 admin/API/UI/SSE 返回 403；healthz 保持跨来源可达。经端口映射从其他机器或容器打开 UI 时设置为 true。
 
 退出信号（SIGINT/SIGTERM）：停止接受新连接，等待在途请求最多 5s 再退出；删除 PID 文件；更新 registry 的 `lastRunAt`。
 
@@ -1349,5 +1349,4 @@ v0.2–v0.4 无新增第三方依赖，仅靠标准库实现。
 - 启动版本优先使用构建注入的 `Version`，直接 `go run`/`go install` 时从 `runtime/debug` 的模块与 VCS 信息兜底，并显示短提交号。
 - Proxy 请求头或响应头模板渲染失败均 fail-closed，返回 502 JSON 错误，包含 route 与出错头名；不会静默丢弃头部。
 - recorder 广播发送与订阅关闭共用 `subsMu`，避免并发关闭导致 panic。
-
 

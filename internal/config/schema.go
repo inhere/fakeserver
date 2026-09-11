@@ -7,7 +7,7 @@ package config
 type Config struct {
 	Server    ServerOpts                `json:"server"`
 	Globals   map[string]any            `json:"globals"`
-	Fallback  string                    `json:"fallback"`
+	Fallback  any                       `json:"fallback"`
 	Routes    []Route                   `json:"routes"`
 	Scenarios map[string]ScenarioConfig `json:"scenarios"`
 
@@ -37,18 +37,26 @@ type Config struct {
 // applied by applyDefaults() in defaults.go when the field is its zero
 // value.
 type ServerOpts struct {
-	Host           string        `json:"host"`
-	Port           int           `json:"port"`
-	Scenario       string        `json:"scenario"`
-	CORS           any           `json:"cors"` // true | false | object — kept as raw any here; Phase 5 parses
-	Log            *bool         `json:"log"`  // pointer to detect "unset" vs "false"
-	MaxBodySize    string        `json:"maxBodySize"`
-	Capture        CaptureConfig `json:"capture"`
-	AdminEnabled   *bool         `json:"adminEnabled"` // pointer：区分 explicit false vs 缺省（默认 true）
-	OSEnvWhitelist []string      `json:"osenvWhitelist"`
-	FakerSeed      int64         `json:"fakerSeed"`
-	HistorySize    int           `json:"historySize"`
-	ProjectName    string        `json:"projectName"`
+	Host             string        `json:"host"`
+	Port             int           `json:"port"`
+	Scenario         string        `json:"scenario"`
+	CORS             any           `json:"cors"` // true | false | object — kept as raw any here; Phase 5 parses
+	Log              *bool         `json:"log"`  // pointer to detect "unset" vs "false"
+	MaxBodySize      string        `json:"maxBodySize"`
+	Capture          CaptureConfig `json:"capture"`
+	AdminEnabled     *bool         `json:"adminEnabled"` // pointer：区分 explicit false vs 缺省（默认 true）
+	AdminAllowRemote bool          `json:"adminAllowRemote"`
+	OSEnvWhitelist   []string      `json:"osenvWhitelist"`
+	FakerSeed        int64         `json:"fakerSeed"`
+	HistorySize      int           `json:"historySize"`
+	ProjectName      string        `json:"projectName"`
+}
+
+type FallbackConfig struct {
+	Status   int               `json:"status"`
+	Headers  map[string]string `json:"headers"`
+	Body     any               `json:"body"`
+	BodyFile string            `json:"bodyFile"`
 }
 
 // ScenarioConfig selects named route cases for a coordinated runtime state.

@@ -39,8 +39,29 @@ func Validate(cfg *Config) []error {
 	var errs []error
 
 	// fallback enum
-	if !validFallback[cfg.Fallback] {
-		errs = append(errs, fmt.Errorf("server.fallback: must be \"echo\" or \"404\", got %q", cfg.Fallback))
+	switch f := cfg.Fallback.(type) {
+	case string:
+		if !validFallback[f] {
+			errs = append(errs, fmt.Errorf("fallback: must be \"echo\" or \"404\", got %q", f))
+		}
+	case map[string]any:
+		status := 404
+		if v, ok := f["status"]; ok {
+			n, ok := v.(float64)
+			if !ok || n < 100 || n > 599 || n != float64(int(n)) {
+				errs = append(errs, fmt.Errorf("fallback: status must be an integer between 100 and 599"))
+			} else {
+				status = int(n)
+			}
+		}
+		_ = status
+		if _, ok := f["body"]; ok {
+			if _, both := f["bodyFile"]; both {
+				errs = append(errs, fmt.Errorf("fallback: body and bodyFile are mutually exclusive"))
+			}
+		}
+	default:
+		errs = append(errs, fmt.Errorf("fallback: must be \"echo\", \"404\", or an object"))
 	}
 
 	if cfg.Server.Capture.MaxBodySize != "" {

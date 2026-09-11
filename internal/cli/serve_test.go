@@ -247,13 +247,66 @@ func TestServe_MockRouteRespondsAfterPhase3(t *testing.T) {
 		t.Errorf("/ping body: %q (want pong from mock; if got JSON echo, mock didn't register)", body)
 	}
 
-	// 未配置的路径仍走 echo catch-all
+	// fallback: "404" returns a structured not-found response.
 	resp2, err2 := http.Get(ts.URL + "/totally/unknown")
 	if err2 != nil {
 		t.Fatal(err2)
 	}
 	defer resp2.Body.Close()
-	if resp2.StatusCode != 200 {
-		t.Errorf("/totally/unknown: status %d (want echo 200)", resp2.StatusCode)
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Errorf("/totally/unknown: status %d (want 404)", resp2.StatusCode)
+	}
+}
+
+func TestServe_Fallback404IncludesMarkerAndRequest(t *testing.T) {
+	cfg := &config.Config{Fallback: "404"}
+	h := assembleHandler(cfg, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true}, nil, nil)
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, httptest.NewRequest(http.MethodPost, "/missing", nil))
+	if r.Code != http.StatusNotFound || r.Header().Get("X-Fakeserver-Fallback") != "404" || !strings.Contains(r.Body.String(), `"method":"POST"`) {
+		t.Fatalf("fallback response: %d %s %q", r.Code, r.Header().Get("X-Fakeserver-Fallback"), r.Body.String())
+	}
+}
+
+func TestServe_FallbackCustomRendersTemplate(t *testing.T) {
+	cfg := &config.Config{Fallback: map[string]any{"status": float64(418), "headers": map[string]any{"X-Test": "{{ .request.path }}"}, "body": map[string]any{"path": "{{ .request.path }}"}}}
+	h := assembleHandler(cfg, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true}, nil, nil)
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/custom", nil))
+	if r.Code != 418 || r.Header().Get("X-Fakeserver-Fallback") != "custom" || r.Header().Get("X-Test") != "/custom" || !strings.Contains(r.Body.String(), "/custom") {
+		t.Fatalf("custom fallback: %d %q %s", r.Code, r.Header().Get("X-Test"), r.Body.String())
+	}
+}
+
+func TestServe_AdminRemoteBlockedHealthzAllowed(t *testing.T) {
+	enabled := true
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: &enabled}}
+	h := assembleHandler(cfg, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true}, nil, nil)
+	remote := httptest.NewRequest(http.MethodGet, "/__fakeserver/api/config", nil)
+	remote.RemoteAddr = "203.0.113.10:1234"
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, remote)
+	if r.Code != http.StatusForbidden {
+		t.Fatalf("remote admin status=%d", r.Code)
+	}
+	health := httptest.NewRequest(http.MethodGet, "/__fakeserver/healthz", nil)
+	health.RemoteAddr = "203.0.113.10:1234"
+	r = httptest.NewRecorder()
+	h.ServeHTTP(r, health)
+	if r.Code != http.StatusOK {
+		t.Fatalf("remote healthz status=%d", r.Code)
+	}
+}
+
+func TestServe_AdminRemoteAllowedWhenConfigured(t *testing.T) {
+	enabled := true
+	cfg := &config.Config{Server: config.ServerOpts{AdminEnabled: &enabled, AdminAllowRemote: true}}
+	h := assembleHandler(cfg, tpl.NewRenderer(nil, nil, 0), serveOptions{Quiet: true, NoCORS: true}, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/__fakeserver/api/config", nil)
+	req.RemoteAddr = "203.0.113.10:1234"
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, req)
+	if r.Code != http.StatusOK {
+		t.Fatalf("remote allowed status=%d", r.Code)
 	}
 }
