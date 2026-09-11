@@ -141,6 +141,26 @@
 - 测试：远程来源访问 admin API / UI / SSE → 403；本机来源 → 正常；远程访问 healthz → 200；adminAllowRemote=true 时远程 → 正常。
 - 文档：README 安全提示、设计文档 §11.6。写明这是行为变更，并说明从别的机器或容器（经端口映射）打开 UI 需要设置 adminAllowRemote。
 
+### 2R 阶段 2 验收返工
+
+2026-09-12 验收：容器内 gofmt / vet / 全量测试 / 全量 `-race` 通过；实测 `"404"`（含 method/path 与标识头）、自定义对象（418 + 模板头与模板 body）、
+admin 远程 403 / 本机放行、healthz 远程放行、`adminAllowRemote: true` 远程放行都符合预期，zy-bsly 替身配置未命中已返回 404。以下问题必须修：
+
+1. **echo 兜底没有标识头**：默认 `fallback: "echo"` 时，未命中路由的回显响应不带 `X-Fakeserver-Fallback: echo`（实测 `GET /nope` 返回 200 且无该头）。补上。
+2. **启动 WARNING 条件没随 2.2 更新**：`internal/cli/serve.go` 约 395 行仍按"监听 0.0.0.0 且 adminEnabled"告警；未开放远程访问（admin 实际只接受本机）时也打印
+   "exposes admin endpoints to the network"，与同一横幅 `ui:` 行的"仅限本机"标注自相矛盾。改为：实际监听地址不是回环地址、admin 启用且 `adminAllowRemote=true` 时才告警。
+3. **横幅按配置值而不是实际监听地址判断**：`internal/cli/banner.go` 约 58 行按 `cfg.Server.Host == "0.0.0.0"` 决定是否标注，`--host` 覆盖时会判错；
+   监听 `192.168.x.x` 这类非回环具体地址同样对外可达，也应标注。改为按实际监听地址判断"是否非回环"，与第 2 条共用一个判定函数；doctor 的对应逻辑同步检查。
+4. **运行时文案统一用英文**：仓库其他运行时提示与错误都是英文（如 `route not found`、`proxy header render failed`），admin 403 错误体和横幅标注却是中文
+   （计划原文写成了中文，被照抄）。改为：403 错误体 `{"error":"admin endpoints are restricted to loopback clients; set server.adminAllowRemote: true to allow remote access"}`，
+   横幅标注 `(loopback only)`。README 与设计文档仍用中文说明。
+5. **README 补 fallback 对象形式的完整示例**：目前只在字段说明里一行带过。补一个代码块：内部服务替身返回统一错误结构，例如
+   `fallback: { status: 404, body: { data: null, status: 404, code: 404, message: "fakeserver: no route for {{ .request.method }} {{ .request.path }}" } }`，
+   并说明所有兜底响应（echo / 404 / 自定义）都带 `X-Fakeserver-Fallback`。
+6. **测试**：第 1 条（echo 标识头）；第 2、3 条共用判定函数的表驱动单测（回环 / `0.0.0.0` / 非回环具体 IP × `adminAllowRemote` 真假）；第 4 条（403 文案）。
+
+提交：1、2+3、4、5 分别提交，测试随对应修复。进度表把阶段 2 改为"已完成（验收返工见 2R）"并新增 2R 行，完成后标记已完成并附提交号。
+
 ## 阶段 3：模板两项
 
 ### 3.1 cases 分支的模板读不到请求体
