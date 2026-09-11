@@ -43,7 +43,15 @@ jobs:
         # Report all results. [added,diff_context,file,nofilter].
         filter_mode: added
         # Exit with 1 when it finds at least one finding.
-        fail_level: 'none'
+        fail_level: 'any'
+
+    - name: Format check
+      if: ${{ matrix.os == 'ubuntu-latest' && matrix.go_version == 'stable' }}
+      run: test -z "$(gofmt -l .)"
+
+    - name: Go vet
+      if: ${{ matrix.os == 'ubuntu-latest' && matrix.go_version == 'stable' }}
+      run: go vet ./...
 
     - name: Mod tidy
       run: |
@@ -53,4 +61,4 @@ jobs:
       # run: go test -v -cover ./...
       # must add " for profile.cov on Windows OS
       run: |
-        go test -coverprofile="profile.cov" ./...
+        go test -coverprofile="profile.cov" ${{ matrix.os == 'ubuntu-latest' && matrix.go_version == 'stable' && '-race' || '' }} ./...
