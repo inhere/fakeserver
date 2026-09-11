@@ -1295,7 +1295,7 @@ if seed == 0 {
 ### 已落地（v0.4 Phase 2 阶段确认）
 
 1. **SSE 端点 `/__fakeserver/events` 实时推送**：Subscribe 返回 `<-chan Event` + cancel；Event 是 `{Kind, Entry, Reload}` 判别联合，让 EventRequest 与 EventReload 共享一条 channel。Logger 中 Append 时 broadcast 给所有订阅者；SSE handler 按 Kind 序列化为 `event: request|reload\ndata: <json>\n\n` 帧。
-2. **慢客户端非阻塞 + EventsDropped 计数**：单订阅者 channel 容量 32；broadcast 持 subsMu 仅收集 channel 引用、发送在锁外；满 channel → 丢弃此事件 + `eventsDropped` atomic 自增——精确实现 §11.5 "慢客户端不阻塞其他客户端"契约。
+2. **慢客户端非阻塞 + EventsDropped 计数**：单订阅者 channel 容量 32；broadcast 持 subsMu 完成非阻塞发送，避免与取消订阅/关闭并发 close 竞态；满 channel → 丢弃此事件 + `eventsDropped` atomic 自增——精确实现 §11.5 "慢客户端不阻塞其他客户端"契约。
 3. **心跳 15s + 客户端断开自动 unsubscribe**：SSE handler 用 `time.Ticker` 周期发 `: ping\n\n`（mount.go 注册时 15s，测试注入 80ms 验证）；监听 `c.Req.Context().Done()` → return + defer cancel() 触发订阅者 close。EmitReload 接口已就绪，watcher 端调用接入留 Phase 3。
 
 ### 已落地（v0.4 Phase 3 阶段确认）
@@ -1349,3 +1349,4 @@ v0.2–v0.4 无新增第三方依赖，仅靠标准库实现。
 - 启动版本优先使用构建注入的 `Version`，直接 `go run`/`go install` 时从 `runtime/debug` 的模块与 VCS 信息兜底，并显示短提交号。
 - Proxy 请求头或响应头模板渲染失败均 fail-closed，返回 502 JSON 错误，包含 route 与出错头名；不会静默丢弃头部。
 - recorder 广播发送与订阅关闭共用 `subsMu`，避免并发关闭导致 panic。
+

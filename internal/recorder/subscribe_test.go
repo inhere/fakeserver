@@ -1,6 +1,7 @@
 package recorder
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -180,4 +181,30 @@ func TestEventsDropped_ConcurrentSafe(t *testing.T) {
 	if atomic.LoadUint64(&r.eventsDropped) == 0 {
 		t.Error("expected EventsDropped > 0 under concurrent Append + slow subscriber")
 	}
+}
+func TestSubscribe_ConcurrentCancelAppendClose(t *testing.T) {
+	r := New(8)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				_, cancel := r.Subscribe()
+				r.Append(Entry{Method: "GET", Path: "/x"})
+				cancel()
+			}
+		}()
+	}
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				r.Append(Entry{Method: "POST", Path: "/y"})
+				r.CloseSubscribers()
+			}
+		}()
+	}
+	wg.Wait()
 }
