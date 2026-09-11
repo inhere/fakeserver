@@ -104,7 +104,7 @@ fakeserver serve -c fakeserver.json5 --env dev
 - `-e, --env`：选择 `fakeserver.env.json5` 中的环境段
 - `--var key=value`：覆盖 env 变量，可重复，也支持单个 flag 内逗号分隔
 - `--scenario`：启动时默认场景
-- `--no-watch`：关闭配置热加载
+- `--no-watch`：关闭配置热加载（默认开启：fsnotify + 每秒轮询兜底，9p/drvfs/NFS 等挂载盘上也能生效）
 - `--no-cors`：关闭 CORS 中间件
 - `-q, --quiet`：关闭请求访问日志
 

@@ -659,11 +659,12 @@ fakeserver v0.1.0 on :5090  ·  5 routes (4 mock, 1 proxy)  ·  env=dev  ·  ech
   *      /api/users/*rest                 → proxy http://real-backend.local:8080
 ```
 
-### 5.2 热加载（fsnotify + 防抖 + 原子切换）
+### 5.2 热加载（fsnotify + 轮询兜底 + 防抖 + 原子切换）
 
 ```
 监听流程：
 - 监听所有已加载文件的所属目录（不监听单文件 inode；保存常用临时文件+rename）
+- 同时每 1s stat 一次被监听文件（mtime + size），作为 fsnotify 的兜底
 - 收到事件 → 入 channel
 - 单一 worker：drain channel，固定 300ms 防抖窗口
 - 窗口结束后重新走 Load + Validate + 预编译
@@ -675,6 +676,13 @@ fakeserver v0.1.0 on :5090  ·  5 routes (4 mock, 1 proxy)  ·  env=dev  ·  ech
 请求路径始终经过间接层 `r := currentRouter.Load(); r.ServeHTTP(w, req)`，所以替换不影响在途请求，新请求看到新表。
 
 **监听范围**：所有 include 链上展开过的文件 + 目录（glob 模式监听目录），**包括 env 文件**。env 文件变更同样触发热加载。
+
+**轮询兜底**（2026-09 补）：fsnotify 在 9p / drvfs / NFS / SMB 及多数 FUSE 挂载上**不可靠**——监听能建立，
+事件却可能一个都不来，也不报错，热加载于是静默失效。WSL2 容器编辑 Windows 盘（`/d/...`）上的配置时实测到：
+watcher 测试在 `/tmp` 全过、放到 `/d` 上回调次数全为 0；长时间运行的实例改配置后不再重载；新起的实例却能正常收到事件。
+时好时坏，所以不能只靠事件：watcher 在 fsnotify 之外再按 `DefaultPollInterval`（1s）轮询文件快照；
+fsnotify 事件到达时先刷新轮询基线，保证一次保存只重载一次。fsnotify 错误与异常的 stat 错误经
+`WithErrorHandler` 回报到 stderr（`warn: config watcher: ...`），同一错误只报一次，不再静默丢弃。
 
 ### 5.3 请求日志
 
@@ -1046,9 +1054,14 @@ env 文件被 watcher 监听；变更触发与主配置相同的"重新加载+�
 
 ### 10.4 PID 文件 + 探活
 
-- 启动期写 `<cwd>/.fakeserver/run.pid`，含 `pid\nport\nstartedAt`
+- **端口监听成功后**写 `<cwd>/.fakeserver/run.pid`，含 `pid\nport\nstartedAt`（注册表写入同理）。
+  端口被占时直接退出，不打印 banner、不写注册表、不碰 PID 文件
 - `fakeserver list` 读 PID 文件 → `os.FindProcess` + signal(0) 探活；活进程标记 `running` + 端口；死进程清理 PID 文件
-- 退出时（含信号退出）删除 PID 文件
+- 退出时（含信号退出）删除 PID 文件，**但只删记录着本进程 pid 的那一份**（`RemovePIDFileIfOwned`）
+
+> 2026-09 修复：旧实现先写 PID 文件再 `ListenAndServe`。端口被占的第二个实例会先覆盖正在运行那个实例的
+> `run.pid`，bind 失败退出时 defer 再把它删掉，`kill $(cat .fakeserver/run.pid)` 就找不到真正在跑的进程。
+> 现在先 `net.Listen` 再做一切有副作用的事，退出时按 pid 归属删除。
 
 ### 10.5 CLI 行为
 
