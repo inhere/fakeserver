@@ -49,6 +49,16 @@ func Mount(r *rux.Router, cfg *config.Config, renderer tpl.Renderer) error {
 	return nil
 }
 
+type responseHeaderRenderError struct {
+	header string
+	err    error
+}
+
+func (e *responseHeaderRenderError) Error() string {
+	return fmt.Sprintf("response header %s: %v", e.header, e.err)
+}
+func (e *responseHeaderRenderError) Unwrap() error { return e.err }
+
 // Build constructs the rux handler for one proxy route. Compilation
 // (rewrite rules / timeout / bodyLimit / target URL) happens once here;
 // the returned handler is allocation-light on the request path.
@@ -147,15 +157,16 @@ func Build(route *config.Route, routeIndex int, renderer tpl.Renderer, envMap ma
 			for k, v := range p.ResponseHeaders {
 				rendered, rerr := renderer.Render(v, ctx)
 				if rerr != nil {
-					return fmt.Errorf("response header %s: %w", k, rerr)
+					return &responseHeaderRenderError{header: k, err: rerr}
 				}
 				resp.Header.Set(k, rendered)
 			}
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, perr error) {
-			if strings.HasPrefix(perr.Error(), "response header ") {
-				writeProxyError(w, http.StatusBadGateway, "proxy header render failed", perr.Error(), route, p.Target)
+			var headerErr *responseHeaderRenderError
+			if errors.As(perr, &headerErr) {
+				writeProxyError(w, http.StatusBadGateway, "proxy header render failed", fmt.Sprintf("route=%s %s header=%s: %v", strings.Join(route.Method, ","), route.Path, headerErr.header, headerErr.err), route, p.Target)
 				return
 			}
 			// Distinguish timeout (504) from other transport errors (502).
@@ -319,7 +330,7 @@ func ParseByteSize(s string) (int64, error) {
 	return sizeparse.ParseByteSize(s)
 }
 
-// writeProxyError emits the §9.3/§6 error body. The `target` field is the
+// writeProxyError emits the §9.3/§6 error body. The 	arget` field is the
 // distinguishing feature of proxy errors vs mock errors.
 func writeProxyError(w http.ResponseWriter, status int, short, detail string, route *config.Route, target string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

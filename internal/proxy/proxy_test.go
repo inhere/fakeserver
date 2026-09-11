@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -449,5 +450,41 @@ func TestParseByteSize(t *testing.T) {
 				t.Errorf("got %d want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestProxy_RequestHeaderRenderFailureDoesNotReachUpstream(t *testing.T) {
+	var called atomic.Bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called.Store(true); w.WriteHeader(200) }))
+	defer upstream.Close()
+	cfg := &config.Config{Routes: []config.Route{{Method: []string{"GET"}, Path: "/x", Proxy: &config.ProxyConfig{Target: upstream.URL, Headers: map[string]string{"X-Bad": `{{ fail "boom" }}`}}}}}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 502 {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if called.Load() {
+		t.Fatal("upstream received request")
+	}
+}
+
+func TestProxy_ResponseHeaderRenderFailure502(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	defer upstream.Close()
+	cfg := &config.Config{Routes: []config.Route{{Method: []string{"GET"}, Path: "/x", Proxy: &config.ProxyConfig{Target: upstream.URL, ResponseHeaders: map[string]string{"X-Bad": `{{ fail "boom" }}`}}}}}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 502 {
+		t.Fatalf("status=%d", resp.StatusCode)
 	}
 }
