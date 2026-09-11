@@ -47,7 +47,12 @@ jobs:
 
     - name: Format check
       if: ${{ matrix.os == 'ubuntu-latest' && matrix.go_version == 'stable' }}
-      run: test -z "$(gofmt -l .)"
+      run: |
+        files="$(gofmt -l .)"
+        if [ -n "$files" ]; then
+          printf '%s\n' "$files"
+          exit 1
+        fi
 
     - name: Go vet
       if: ${{ matrix.os == 'ubuntu-latest' && matrix.go_version == 'stable' }}
@@ -62,3 +67,4 @@ jobs:
       # must add " for profile.cov on Windows OS
       run: |
         go test -coverprofile="profile.cov" ${{ matrix.os == 'ubuntu-latest' && matrix.go_version == 'stable' && '-race' || '' }} ./...
+
