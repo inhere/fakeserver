@@ -58,9 +58,10 @@ func fakeserverFuncs(osenvWhitelist []string) template.FuncMap {
 		"jsonEscape": funcJSONEscape,
 
 		// === JSON ===
-		"toJson":   funcToJSON,
-		"fromJson": funcFromJSON,
-		"jsonPath": funcJSONPath,
+		"toJson":    funcToJSON,
+		"fromJson":  funcFromJSON,
+		"jsonValue": funcToJSON,
+		"jsonPath":  funcJSONPath,
 
 		// === String additions ===
 		"title": funcTitle,

@@ -34,12 +34,12 @@ import (
 //
 // On any rendering error the response becomes 500 + JSON error body.
 func Respond(c *rux.Context, route *config.Route, routeIndex int, renderer tpl.Renderer, envMap map[string]any) {
-	respondWithTrace(c, route, routeIndex, "mock", nil, renderer, envMap)
+	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil, envMap)
+	respondWithTrace(c, route, routeIndex, "mock", nil, renderer, envMap, ctx)
 }
 
-func respondWithTrace(c *rux.Context, route *config.Route, routeIndex int, mode string, caseIndex *int, renderer tpl.Renderer, envMap map[string]any) {
+func respondWithTrace(c *rux.Context, route *config.Route, routeIndex int, mode string, caseIndex *int, renderer tpl.Renderer, envMap map[string]any, ctx map[string]any) {
 	recordRouteTrace(c, route, routeIndex, mode, caseIndex)
-	ctx := tpl.BuildRenderCtx(c.Req, paramsFromContext(c), nil, envMap)
 
 	// 2. Render headers
 	renderedHeaders, err := renderHeaders(route.Headers, renderer, ctx)
@@ -149,6 +149,13 @@ func renderBody(body any, r tpl.Renderer, ctx map[string]any) (any, error) {
 		rendered, err := r.Render(v, ctx)
 		if err != nil {
 			return nil, renderFieldError{source: v, err: err}
+		}
+		trimmed := strings.TrimSpace(v)
+		if strings.HasPrefix(trimmed, "{{") && strings.HasSuffix(trimmed, "}}") && strings.Contains(trimmed, "jsonValue") {
+			var value any
+			if err := json.Unmarshal([]byte(rendered), &value); err == nil {
+				return value, nil
+			}
 		}
 		return rendered, nil
 	case map[string]any:

@@ -479,6 +479,38 @@ func TestRespond_BodyAsSlice(t *testing.T) {
 	}
 }
 
+func TestRespond_JSONValuePreservesTypes(t *testing.T) {
+	r := tpl.NewRenderer(nil, nil, 0)
+	route := &config.Route{Method: []string{"POST"}, Path: "/types", Body: map[string]any{
+		"count": `{{ jsonValue .request.body.count }}`,
+		"ok":    `{{ jsonValue .request.body.ok }}`,
+		"obj":   `{{ jsonValue .request.body.obj }}`,
+		"arr":   `{{ jsonValue .request.body.arr }}`,
+		"nil":   `{{ jsonValue .request.body.missing }}`,
+		"label": `id={{ .request.body.count }}`,
+	}, Headers: map[string]string{"X-Count": `{{ jsonValue .request.body.count }}`}}
+	ts := newRespondServer(t, "POST", "/types", route, r)
+	defer ts.Close()
+	resp, err := http.Post(ts.URL+"/types", "application/json", strings.NewReader(`{"count":42,"ok":true,"obj":{"a":1},"arr":[1,2]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["count"].(float64); !ok || got["count"] != 42.0 {
+		t.Errorf("count=%v", got["count"])
+	}
+	if got["ok"] != true || got["nil"] != nil {
+		t.Errorf("types=%#v", got)
+	}
+	if resp.Header.Get("X-Count") != "42" || got["label"] != "id=42" {
+		t.Errorf("header/label=%q/%v", resp.Header.Get("X-Count"), got["label"])
+	}
+}
+
 // TestRespond_NestedSliceTemplateRender: body 是嵌套 slice，模板字符串应被渲染
 func TestRespond_NestedSliceTemplateRender(t *testing.T) {
 	r := tpl.NewRenderer(nil, nil, 0)
