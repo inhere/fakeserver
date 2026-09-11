@@ -292,6 +292,9 @@ func TestServe_AdminRemoteBlockedHealthzAllowed(t *testing.T) {
 	if r.Code != http.StatusForbidden {
 		t.Fatalf("remote admin status=%d", r.Code)
 	}
+	if !strings.Contains(r.Body.String(), "admin endpoints are restricted to loopback clients") {
+		t.Fatalf("unexpected admin error body: %s", r.Body.String())
+	}
 	health := httptest.NewRequest(http.MethodGet, "/__fakeserver/healthz", nil)
 	health.RemoteAddr = "203.0.113.10:1234"
 	r = httptest.NewRecorder()
