@@ -1,0 +1,11 @@
+# 换行统一为 LF：仓库会同时被 Windows 主机和 Linux 容器读写（同一个工作区），
+# Windows 编辑器/工具写出的 CRLF 在提交时统一转成 LF，也不再在另一侧显示成假改动
+* text=auto eol=lf
+
+# 二进制
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
