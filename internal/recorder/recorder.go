@@ -198,14 +198,8 @@ func (r *Ring) EventsDropped() uint64 {
 // 慢订阅者（channel 满）→ 丢弃此事件 + EventsDropped 自增；不影响其他订阅者。
 func (r *Ring) broadcast(ev Event) {
 	r.subsMu.Lock()
-	// 复制订阅者引用到本地切片，避免持锁期间 send 阻塞影响其他 Subscribe/Unsubscribe
-	chans := make([]chan Event, 0, len(r.subscribers))
+	defer r.subsMu.Unlock()
 	for _, ch := range r.subscribers {
-		chans = append(chans, ch)
-	}
-	r.subsMu.Unlock()
-
-	for _, ch := range chans {
 		select {
 		case ch <- ev:
 		default:
