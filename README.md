@@ -189,6 +189,20 @@ curl http://127.0.0.1:5090/users/1001
 - `server`：监听地址、端口、CORS、日志、请求体上限、Web UI、history、capture、默认 scenario 等。
 - `globals`：模板中可访问的全局变量。
 - `fallback`：无路由命中时的行为，支持 `echo`、`404`，或自定义对象（`status`、`headers`、`body`/`bodyFile`，默认状态码 404）。所有兜底响应带 `X-Fakeserver-Fallback` 标识；内部服务替身建议使用 `404` 获得统一错误结构。
+
+内部服务替身可使用自定义对象返回统一错误结构：
+
+```yaml
+fallback:
+  status: 404
+  body:
+    data: null
+    status: 404
+    code: 404
+    message: "fakeserver: no route for {{ .request.method }} {{ .request.path }}"
+```
+
+`echo`、`404` 和自定义兜底响应都会带 `X-Fakeserver-Fallback` 响应头。
 - `routes`：路由声明数组，也可以使用 `@path/to/file.json5` 引入其他 route 文件。
 - `scenarios`：命名场景，用于为多条 route 选择指定 case。
 
