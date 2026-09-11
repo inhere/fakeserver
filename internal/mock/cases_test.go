@@ -55,6 +55,21 @@ func mustMatcher(t *testing.T, expr string) *Matcher {
 	return m
 }
 
+func TestRespondCases_BodyTemplateSeesRequestBody(t *testing.T) {
+	route := &config.Route{Method: []string{"POST"}, Path: "/case", Cases: []config.RouteCase{{When: `request.body.id == 7`, Body: map[string]any{"echo": `{{ .request.body.id }}`}}}}
+	ts := startCasesServer(t, route, tpl.NewRenderer(nil, nil, 0))
+	defer ts.Close()
+	resp, err := http.Post(ts.URL+"/case", "application/json", strings.NewReader(`{"id":7}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(b), `"echo":"7"`) {
+		t.Fatalf("body=%s", b)
+	}
+}
+
 func TestRespondCases_UsesScenarioCase(t *testing.T) {
 	route := &config.Route{
 		Method:   []string{"GET"},
