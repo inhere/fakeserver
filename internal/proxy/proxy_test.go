@@ -264,6 +264,37 @@ func TestProxy_RequestHeaderInjection(t *testing.T) {
 	}
 }
 
+func TestProxy_RequestHeaderRenderedOncePerRequest(t *testing.T) {
+	values := make(chan string, 2)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		values <- r.Header.Get("X-Count")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{Routes: []config.Route{{
+		Method: []string{"GET"}, Path: "/x",
+		Proxy: &config.ProxyConfig{Target: upstream.URL, Headers: map[string]string{"X-Count": `{{ incr "k" }}`}},
+	}}}
+	srv := startProxyServer(t, cfg)
+	defer srv.Close()
+
+	for i := 0; i < 2; i++ {
+		resp, err := http.Get(srv.URL + "/x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status=%d", resp.StatusCode)
+		}
+	}
+	got := []string{<-values, <-values}
+	if got[0] != "1" || got[1] != "2" {
+		t.Fatalf("upstream header values=%v, want [1 2]", got)
+	}
+}
+
 func TestProxy_ResponseHeaderInjection(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)

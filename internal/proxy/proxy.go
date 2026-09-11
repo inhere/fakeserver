@@ -133,21 +133,6 @@ func Build(route *config.Route, routeIndex int, renderer tpl.Renderer, envMap ma
 				path = newPath
 			}
 			req.URL.Path = path
-			// 4. Inject request headers (template-rendered values).
-			// NOTE: We build a lightweight render ctx manually here to avoid
-			// consuming req.Body (BuildRenderCtx reads+closes the body, which
-			// would break body forwarding to upstream).
-			if len(p.Headers) > 0 {
-				ctx := buildProxyRenderCtx(req, envMap)
-				for k, v := range p.Headers {
-					rendered, rerr := renderer.Render(v, ctx)
-					if rerr != nil {
-						req.Header.Set("X-Fakeserver-Proxy-Render-Error", fmt.Sprintf("request header %s: %v", k, rerr))
-						return
-					}
-					req.Header.Set(k, rendered)
-				}
-			}
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			if len(p.ResponseHeaders) == 0 {
@@ -184,14 +169,16 @@ func Build(route *config.Route, routeIndex int, renderer tpl.Renderer, envMap ma
 	return func(c *rux.Context) {
 		req := c.Req
 		// Render request headers before forwarding so failures fail closed.
-		for k, v := range p.Headers {
+		if len(p.Headers) > 0 {
 			ctx := buildProxyRenderCtx(req, envMap)
-			rendered, rerr := renderer.Render(v, ctx)
-			if rerr != nil {
-				writeProxyError(c.Resp, http.StatusBadGateway, "proxy header render failed", fmt.Sprintf("route=%s %s header=%s: %v", strings.Join(route.Method, ","), route.Path, k, rerr), route, p.Target)
-				return
+			for k, v := range p.Headers {
+				rendered, rerr := renderer.Render(v, ctx)
+				if rerr != nil {
+					writeProxyError(c.Resp, http.StatusBadGateway, "proxy header render failed", fmt.Sprintf("route=%s %s header=%s: %v", strings.Join(route.Method, ","), route.Path, k, rerr), route, p.Target)
+					return
+				}
+				req.Header.Set(k, rendered)
 			}
-			req.Header.Set(k, rendered)
 		}
 		recorder.SetRouteMatch(req.Context(), recorder.RequestTrace{
 			RouteIndex:  &routeIndex,
@@ -330,7 +317,7 @@ func ParseByteSize(s string) (int64, error) {
 	return sizeparse.ParseByteSize(s)
 }
 
-// writeProxyError emits the §9.3/§6 error body. The 	arget` field is the
+// writeProxyError emits the §9.3/§6 error body. The `target` field is the
 // distinguishing feature of proxy errors vs mock errors.
 func writeProxyError(w http.ResponseWriter, status int, short, detail string, route *config.Route, target string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
