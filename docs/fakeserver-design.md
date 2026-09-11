@@ -544,6 +544,7 @@ JSON：
   toJson v                        序列化为紧凑 JSON
   fromJson s                      反序列化为对象
   jsonPath obj "a.b[0]"           快速取嵌套字段，缺失返回空
+  jsonValue v                      body 中整体模板动作保留 JSON 原始类型；headers 输出 JSON 文本
 
 字符串补充：
   title                           tplfunc 未提供

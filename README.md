@@ -414,6 +414,8 @@ server: {
 
 ## 模板上下文
 
+JSON body 中使用 `jsonValue` 可保留请求字段的原始类型，例如 `{{ jsonValue .request.body.id }}` 会将数字 ID 按数字回显；混排文本仍按字符串渲染，响应头输出 JSON 文本。`toJson`/`fromJson` 在标准模板渲染中产生字符串，不能单独保留 body 字段类型。
+
 常用上下文：
 
 - `.request.method`
