@@ -1344,3 +1344,8 @@ if seed == 0 {
 | **v1.x** | 录制-回放、json-server 风格资源 CRUD、debug capture、Web UI dark mode/写操作、**静态目录服务**（`{ path:"/static/*rest", static:"./public" }`）、JSON 字段顺序稳定化、日志 JSON 格式 | — | — |
 
 v0.2–v0.4 无新增第三方依赖，仅靠标准库实现。
+### v0.8 加固补充
+
+- 启动版本优先使用构建注入的 `Version`，直接 `go run`/`go install` 时从 `runtime/debug` 的模块与 VCS 信息兜底，并显示短提交号。
+- Proxy 请求头或响应头模板渲染失败均 fail-closed，返回 502 JSON 错误，包含 route 与出错头名；不会静默丢弃头部。
+- recorder 广播发送与订阅关闭共用 `subsMu`，避免并发关闭导致 panic。

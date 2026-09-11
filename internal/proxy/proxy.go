@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -133,8 +132,8 @@ func Build(route *config.Route, routeIndex int, renderer tpl.Renderer, envMap ma
 				for k, v := range p.Headers {
 					rendered, rerr := renderer.Render(v, ctx)
 					if rerr != nil {
-						log.Printf("[proxy] %s header %q render err: %v (dropping)", route.Path, k, rerr)
-						continue
+						req.Header.Set("X-Fakeserver-Proxy-Render-Error", fmt.Sprintf("request header %s: %v", k, rerr))
+						return
 					}
 					req.Header.Set(k, rendered)
 				}
@@ -148,14 +147,17 @@ func Build(route *config.Route, routeIndex int, renderer tpl.Renderer, envMap ma
 			for k, v := range p.ResponseHeaders {
 				rendered, rerr := renderer.Render(v, ctx)
 				if rerr != nil {
-					log.Printf("[proxy] %s response-header %q render err: %v (dropping)", route.Path, k, rerr)
-					continue
+					return fmt.Errorf("response header %s: %w", k, rerr)
 				}
 				resp.Header.Set(k, rendered)
 			}
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, perr error) {
+			if strings.HasPrefix(perr.Error(), "response header ") {
+				writeProxyError(w, http.StatusBadGateway, "proxy header render failed", perr.Error(), route, p.Target)
+				return
+			}
 			// Distinguish timeout (504) from other transport errors (502).
 			if errors.Is(perr, context.DeadlineExceeded) ||
 				errors.Is(perr, context.Canceled) ||
@@ -170,6 +172,16 @@ func Build(route *config.Route, routeIndex int, renderer tpl.Renderer, envMap ma
 
 	return func(c *rux.Context) {
 		req := c.Req
+		// Render request headers before forwarding so failures fail closed.
+		for k, v := range p.Headers {
+			ctx := buildProxyRenderCtx(req, envMap)
+			rendered, rerr := renderer.Render(v, ctx)
+			if rerr != nil {
+				writeProxyError(c.Resp, http.StatusBadGateway, "proxy header render failed", fmt.Sprintf("route=%s %s header=%s: %v", strings.Join(route.Method, ","), route.Path, k, rerr), route, p.Target)
+				return
+			}
+			req.Header.Set(k, rendered)
+		}
 		recorder.SetRouteMatch(req.Context(), recorder.RequestTrace{
 			RouteIndex:  &routeIndex,
 			RouteMode:   "proxy",
