@@ -15,7 +15,9 @@ LDFLAGS := -s -w \
 	-X main.GitHash=$(GIT_HASH) \
 	-X 'main.BuildTime=$(BUILD_TIME)'
 
-GOBIN_DIR := $(if $(GOBIN),$(GOBIN),$(shell go env GOPATH)/bin)
+# Install dir: prefer `go env GOBIN` (also covers `go env -w`), else GOPATH/bin.
+# On Windows go env returns D:\... paths; the shell would eat the backslashes, so use forward slashes.
+GOBIN_DIR := $(subst \,/,$(or $(shell go env GOBIN),$(shell go env GOPATH)/bin))
 .PHONY: all build backend clean help install fmt-check vet test check
 
 ## all: build (default)
@@ -28,10 +30,10 @@ build:
 	@if command -v upx >/dev/null 2>&1; then upx -6 --no-progress $(BINARY); else echo "⏭ upx not found; skipping compression"; fi
 	@echo "✅ Binary: $(BINARY) ($$(du -sh $(BINARY) | cut -f1))"
 
-## install: install Go binary to $GOPATH/bin
+## install: install Go binary to GOBIN (or GOPATH/bin)
 install:
 	go install -ldflags "$(LDFLAGS)" $(MAIN_DIR)
-	@if command -v upx >/dev/null 2>&1; then upx -6 --no-progress $(GOBIN_DIR)/$(BINARY); else echo "⏭ upx not found; skipping compression"; fi
+	@if command -v upx >/dev/null 2>&1; then upx -6 --no-progress "$(GOBIN_DIR)/$(BINARY)" || echo "⚠ upx failed; keeping the uncompressed binary"; else echo "⏭ upx not found; skipping compression"; fi
 	@echo "✅ Installed to $(GOBIN_DIR)"
 
 fmt-check:
