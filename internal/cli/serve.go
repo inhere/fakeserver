@@ -68,6 +68,17 @@ func resolveListenAddr(cfg *config.Config, opts serveOptions) (string, int) {
 	return host, port
 }
 
+func isNonLoopbackListenHost(host string) bool {
+	if host == "" {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return host != "localhost"
+	}
+	return !ip.IsLoopback()
+}
+
 func listenAddrReloadWarning(curHost string, curPort int, newCfg *config.Config, opts serveOptions) string {
 	newHost, newPort := resolveListenAddr(newCfg, opts)
 	if newHost == curHost && newPort == curPort {
@@ -155,6 +166,13 @@ func assembleHandler(cfg *config.Config, renderer tpl.Renderer, opts serveOption
 	}
 
 	h := middleware.Chain(r, mws...)
+	if cfg == nil || fallbackName(cfg) == "echo" {
+		next := h
+		h = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("X-Fakeserver-Fallback", "echo")
+			next.ServeHTTP(w, req)
+		})
+	}
 	if cfg != nil && adminOn(cfg) && !cfg.Server.AdminAllowRemote {
 		h = adminLocalOnly(h)
 	}
@@ -172,7 +190,7 @@ func adminLocalOnly(next http.Handler) http.Handler {
 			if err != nil || !ip.IsLoopback() {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)
-				_, _ = w.Write([]byte(`{"error":"admin 端点仅限本机访问，如需远程访问设置 server.adminAllowRemote: true"}`))
+				_, _ = w.Write([]byte(`{"error":"admin endpoints are restricted to loopback clients; set server.adminAllowRemote: true to allow remote access"}`))
 				return
 			}
 		}
@@ -392,7 +410,9 @@ func runServe(opts serveOptions) error {
 
 	// v0.4 Phase 1：0.0.0.0 + adminEnabled 组合发 WARNING（design §11.6）。
 	if listenHost == "0.0.0.0" && cfg != nil && cfg.Server.AdminEnabled != nil && *cfg.Server.AdminEnabled {
-		fmt.Fprintln(os.Stderr, "WARNING: listening on 0.0.0.0 with adminEnabled=true exposes admin endpoints to the network")
+		if isNonLoopbackListenHost(listenHost) && cfg != nil && adminOn(cfg) && cfg.Server.AdminAllowRemote {
+			fmt.Fprintln(os.Stderr, "WARNING: listening on a non-loopback address with adminAllowRemote=true exposes admin endpoints to the network")
+		}
 	}
 
 	holder := middleware.NewHolder()

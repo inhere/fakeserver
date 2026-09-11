@@ -65,6 +65,9 @@ func TestServe_EchoCatchAllOnUnknownPath(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 (echo fallback), got %d", resp.StatusCode)
 	}
+	if got := resp.Header.Get("X-Fakeserver-Fallback"); got != "echo" {
+		t.Fatalf("expected echo fallback marker, got %q", got)
+	}
 }
 
 func TestServe_StatusEndpoint(t *testing.T) {
