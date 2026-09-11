@@ -115,11 +115,9 @@ func runDoctor(opts doctorOptions) error {
 
 	if cfg.Server.AdminEnabled != nil && *cfg.Server.AdminEnabled {
 		findings = append(findings, doctorFinding{Level: "OK", Area: "webui", Message: "/__fakeserver/ui/ enabled"})
-		if cfg.Server.Host == "0.0.0.0" {
+		if isNonLoopbackListenHost(cfg.Server.Host) {
 			if cfg.Server.AdminAllowRemote {
-				findings = append(findings, doctorFinding{Level: "WARN", Area: "admin", Message: "host=0.0.0.0 with adminAllowRemote=true exposes admin endpoints", Fix: "set server.host to 127.0.0.1 or adminAllowRemote=false"})
-			} else {
-				findings = append(findings, doctorFinding{Level: "WARN", Area: "admin", Message: "host=0.0.0.0; admin endpoints accept local connections only", Fix: "set server.host to 127.0.0.1 for stricter network exposure"})
+				findings = append(findings, doctorFinding{Level: "WARN", Area: "admin", Message: "non-loopback host with adminAllowRemote=true exposes admin endpoints", Fix: "set server.host to 127.0.0.1 or adminAllowRemote=false"})
 			}
 		}
 	} else {

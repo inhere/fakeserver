@@ -67,7 +67,7 @@ func TestRunDoctor_AdminExposureWarn(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "fakeserver.json5")
 	body := `{
-		server: { host: "0.0.0.0", adminEnabled: true },
+		server: { host: "0.0.0.0", adminEnabled: true, adminAllowRemote: true },
 		routes: [{ method: "GET", path: "/ping", body: "pong" }],
 	}`
 	if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {

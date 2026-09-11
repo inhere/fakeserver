@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"net"
 	"path/filepath"
 	"strings"
 
@@ -55,14 +56,22 @@ func printBanner(w io.Writer, cfg *config.Config, version, addr string) {
 		}
 	}
 	ui := bannerUIURL(cfg, addr)
-	if cfg.Server.Host == "0.0.0.0" && !cfg.Server.AdminAllowRemote {
-		ui += " (仅限本机访问)"
+	if isNonLoopbackListenHost(hostFromAddr(addr)) && !cfg.Server.AdminAllowRemote {
+		ui += " (loopback only)"
 	}
 	fmt.Fprintf(w, "│  ui:          %s\n", ui)
 	fmt.Fprintf(w, "│  config:      %s (+%d includes)\n", primary, extra)
 	fmt.Fprintf(w, "│  routes:      %d mock, %d cases, %d proxy, fallback=%s\n", mockN, casesN, proxyN, bannerFallback(cfg))
 	fmt.Fprintf(w, "│  env:         %s\n", bannerEnv(cfg))
 	fmt.Fprintln(w, "╰─")
+}
+
+func hostFromAddr(addr string) string {
+	h, _, err := net.SplitHostPort(addr)
+	if err == nil {
+		return h
+	}
+	return strings.Split(addr, ":")[0]
 }
 
 func bannerFallback(cfg *config.Config) string {
