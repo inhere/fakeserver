@@ -8,12 +8,18 @@
 | 阶段 | 内容 | 状态 | job / 提交 |
 |---|---|---|---|
 | 1 | 小修四项（1.1-1.4） | 已完成（验收未通过，见 1R） | `46a9bb5` / `4f59d3e` / `8b4ad66` / `665bf5c` |
-| 1R | 阶段 1 验收返工 | 已完成 | `903957d` / `687a626` / `4f3bfe1` / `aab9425` |
+| 1R | 阶段 1 验收返工 | 已完成（第 2 条未做，见 1R2） | `903957d` / `687a626` / `4f3bfe1` / `aab9425` |
+| 1R2 | 1R 验收返工 | 待开始 | |
 | 2 | fallback 可配置 + admin 默认仅本机（2.1-2.2） | 待开始 | |
 | 3 | 模板两项（3.1-3.2） | 待开始 | |
 
 ## 通用约定（每个阶段都适用）
 
+- **不要用 PowerShell 双引号字符串（含 `@"..."@`）写文件内容**：反引号是 PowerShell 的转义符，
+  反引号加 t / n / r / 0 / a / b / f / v 会被替换成制表符、换行、回车、空字符等控制字符，Markdown 行内代码和 Go 注释会被悄悄破坏
+  （已发生过：设计文档出现空字符、`proxy.go` 注释 "The `target` field" 被写成 "The <制表符>arget` field"）。
+  改文件用 apply_patch；非用 PowerShell 不可时只用单引号 here-string `@'...'@`。
+  每次提交前运行 `git grep -nP "[\x00-\x08\x0b\x0c\x0e-\x1f]" -- <本次改动的文件>` 必须无输出，并逐处核对 diff 中反引号附近的字符。
 - 只改本仓库；不 push；不 amend / rebase 已有提交；不改 go.mod 依赖版本。
 - 每个条目一个提交，英文 conventional commits（如 `fix(recorder): ...`）。文档改动可随所属条目一起提交。
 - 换行一律 LF（仓库已有 `.gitattributes`）。
@@ -87,6 +93,20 @@
 4. **CI 的 gofmt 检查失败时不列出文件**：改为先列出不合规文件再失败。
 
 提交：按 1-4 分提交（测试可随对应修复一起提交），不改动阶段 1 以外的条目。
+
+### 1R2 1R 验收返工
+
+2026-09-12 验收 1R：新增的 7 条测试有效（容器内全量 `-race` 通过，recorder 并发测试 `-count=5` 稳定），但还有两处必须修：
+
+1. **1R 第 2 条没有做，而汇报称已完成**。`internal/proxy/proxy.go` 的 Director 里仍有整段请求头渲染（`buildProxyRenderCtx` + `renderer.Render`，
+   出错时设置 `X-Fakeserver-Proxy-Render-Error`）；handler 里的预渲染也仍在循环内为每个头各构造一次上下文。要求：
+   - 删除 Director 中的请求头渲染代码（连同 `X-Fakeserver-Proxy-Render-Error`），Director 只处理 URL / Host / Path；
+   - handler 在循环外构造一次上下文，渲染全部请求头，失败即 502；
+   - 新增测试：proxy 请求头配置成计数模板（如 `{{ incr "k" }}`，以仓库里 `incr` 的实际签名为准），连续两次请求，上游收到的值依次为 1、2，证明每个请求只渲染一次；
+   - 自查：运行 `grep -n "Render" internal/proxy/proxy.go`，Director 函数体内不得再有渲染调用，把这条命令的输出贴进汇报。
+2. **注释被 PowerShell 转义破坏**：`internal/proxy/proxy.go` 约 333 行的 "The <制表符>arget` field" 恢复为 "The `target` field"，并按通用约定第一条用 `git grep` 自查。
+
+提交：1、2 各一个提交。
 
 ## 阶段 2：fallback 可配置 + admin 默认仅本机
 
