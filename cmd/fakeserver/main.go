@@ -5,11 +5,19 @@
 // definitions.
 package main
 
-import "github.com/inhere/fakeserver/internal/cli"
+import (
+	"github.com/inhere/fakeserver/internal/buildinfo"
+	"github.com/inhere/fakeserver/internal/cli"
+)
 
 // 在 build 时通过 ldflags 注入：-X main.version=v0.1.0
-var version = "dev"
+var (
+	Version   = "0.1.0"
+	BuildTime = ""
+	GitHash   = "unknown"
+)
 
 func main() {
-	cli.Run(version)
+	buildinfo.Set(Version, BuildTime, GitHash)
+	cli.Run(Version)
 }
