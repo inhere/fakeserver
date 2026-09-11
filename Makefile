@@ -15,7 +15,8 @@ LDFLAGS := -s -w \
 	-X main.GitHash=$(GIT_HASH) \
 	-X 'main.BuildTime=$(BUILD_TIME)'
 
-.PHONY: all build backend clean help
+GOBIN_DIR := $(if $(GOBIN),$(GOBIN),$(shell go env GOPATH)/bin)
+.PHONY: all build backend clean help install fmt-check vet test check
 
 ## all: build (default)
 all: build
@@ -24,15 +25,22 @@ all: build
 build:
 	@echo "🐹 Building Go binary ($(VERSION) @ $(GIT_HASH))..."
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) $(MAIN_DIR)
-	@echo "📦 Compressing binary..."
-	@upx -6 --no-progress $(BINARY)
+	@if command -v upx >/dev/null 2>&1; then upx -6 --no-progress $(BINARY); else echo "⏭ upx not found; skipping compression"; fi
 	@echo "✅ Binary: $(BINARY) ($$(du -sh $(BINARY) | cut -f1))"
 
 ## install: install Go binary to $GOPATH/bin
 install:
 	go install -ldflags "$(LDFLAGS)" $(MAIN_DIR)
-	upx -6 --no-progress $(GOPATH)/bin/$(BINARY)
-	@echo "✅ Installed to GOPATH/bin"
+	@if command -v upx >/dev/null 2>&1; then upx -6 --no-progress $(GOBIN_DIR)/$(BINARY); else echo "⏭ upx not found; skipping compression"; fi
+	@echo "✅ Installed to $(GOBIN_DIR)"
+
+fmt-check:
+	@test -z "$$(gofmt -l .)" || (gofmt -l .; exit 1)
+vet:
+	go vet ./...
+test:
+	go test ./...
+check: fmt-check vet test
 
 ## run: build and run with current directory
 run: build

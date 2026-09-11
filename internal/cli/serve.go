@@ -17,6 +17,7 @@ import (
 	"github.com/gookit/rux/v2"
 
 	"github.com/inhere/fakeserver/internal/admin"
+	"github.com/inhere/fakeserver/internal/buildinfo"
 	"github.com/inhere/fakeserver/internal/config"
 	"github.com/inhere/fakeserver/internal/echo"
 	"github.com/inhere/fakeserver/internal/middleware"
@@ -417,6 +418,7 @@ func runServe(opts serveOptions) error {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(stop)
 
 	serverErr := make(chan error, 1)
 	go func() {
@@ -499,10 +501,15 @@ func routeDetail(route config.Route) string {
 		mode, route.Status, len(route.Cases), route.Strategy, proxyTarget, route.Body != nil, route.BodyFile)
 }
 
-// version returns the build-injected version string. Currently a stub
-// returning "v0.1.0"; cmd/fakeserver/main.go can override via ldflags.
 func version() string {
-	return "v0.1.0"
+	v := buildinfo.Version
+	if v == "" {
+		v = "dev"
+	}
+	if buildinfo.GitHash != "" && buildinfo.GitHash != "unknown" {
+		v += " (" + buildinfo.GitHash + ")"
+	}
+	return v
 }
 
 // adminOn 返回 cfg 是否启用 admin/webui 端点（design §11.6）。

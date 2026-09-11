@@ -8,16 +8,18 @@ package main
 import (
 	"github.com/inhere/fakeserver/internal/buildinfo"
 	"github.com/inhere/fakeserver/internal/cli"
+	"runtime/debug"
 )
 
-// 在 build 时通过 ldflags 注入：-X main.version=v0.1.0
+// 在 build 时通过 ldflags 注入：-X main.Version=v0.8.0
 var (
-	Version   = "0.1.0"
+	Version   = "dev"
 	BuildTime = ""
 	GitHash   = "unknown"
 )
 
 func main() {
+	Version, BuildTime, GitHash = buildinfo.FromBuildInfo(Version, BuildTime, GitHash, func() *debug.BuildInfo { i, _ := debug.ReadBuildInfo(); return i }())
 	buildinfo.Set(Version, BuildTime, GitHash)
 	cli.Run(Version)
 }

@@ -19,11 +19,19 @@
 go run ./cmd/fakeserver --help
 ```
 
-安装到 Go bin：
+推荐使用 Makefile 安装（会写入版本、提交号和构建时间；检测到 `upx` 才压缩）：
+
+```bash
+make install
+```
+
+也可直接安装到 Go bin：
 
 ```bash
 go install ./cmd/fakeserver
 ```
+
+此方式未经过 ldflags 时会从 git 提交兜底版本信息。
 
 构建当前平台二进制：
 
@@ -37,7 +45,7 @@ go build -o fakeserver ./cmd/fakeserver
 make build
 ```
 
-`make build` 会调用 `upx` 压缩二进制；如果本机没有 `upx`，使用上面的 `go build` 即可。
+`make build` 检测到 `upx` 才压缩，没有时会跳过并提示。
 
 ## 快速开始
 
