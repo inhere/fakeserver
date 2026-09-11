@@ -193,3 +193,19 @@ admin 远程 403 / 本机放行、healthz 远程放行、`adminAllowRemote: true
 - 适用于 route、case 和 2.1 的自定义 fallback 的 body。
 - 测试：数字 / 布尔 / 对象 / 数组 / null 原样回显；混排文本；headers；case 内使用；fallback 内使用。
 - 文档：README 模板章节与设计文档，补一个"把请求里的数字 ID 按数字回显"的示例。
+
+## 验收总结（2026-09-12）
+
+阶段 3 通过验收（job `20260912-021018-b7f7d99f`）：容器内 gofmt / vet / 全量测试 / 全量 `-race` 通过；实测 `jsonValue` 对数字 / 布尔 / 对象 / 数组 / 缺失字段按原类型回显，
+内容像 JSON 的请求字符串仍是字符串，混排文本、普通模板、`toJson`、字面量的行为不变，headers 输出 JSON 文本；case 模板能读 `.request.body` 并使用 `jsonValue`；
+自定义 fallback 的 body 同样生效。2R 遗留两项已完成（`edae5e9` 与进度表）。
+
+已知限制（记录在案，不再返工）：
+
+- 3.2 判断"整个字段是一个 jsonValue 动作"用的是宽松规则：字段去掉首尾空白后以 `{{` 开头、以 `}}` 结尾且包含 `jsonValue`，渲染结果能解析成 JSON 就按值替换。
+  多个动作拼出合法 JSON 文本的极端写法（如 `{{ .a }}{{ jsonValue .b }}`）也会被还原成值。
+- "case 内使用 jsonValue""fallback 内使用 jsonValue"没有专门的自动化测试，只做了手工验证。
+- 阶段 2 中 admin 限制的主体代码落在 `b87fe03`（fallback 提交）里，提交没有按条目拆分。
+
+主机安装验证：`make install` 在 Windows 上失败——阶段 1 改的 `GOBIN_DIR` 取 `go env GOPATH` 得到 `D:\env\gopath`，反斜杠被 shell 吃掉成
+`D:envgopath/bin/fakeserver.exe`，upx 找不到文件报错（`go install` 本身已成功）。已修正：路径统一换成正斜杠、优先 `go env GOBIN`，upx 压缩失败不再让 install 失败。
