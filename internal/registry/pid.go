@@ -59,3 +59,20 @@ func RemovePIDFile(path string) error {
 	}
 	return nil
 }
+
+// RemovePIDFileIfOwned 仅当 path 里记录的 pid 等于 owner 时才删除。
+//
+// 同一 cwd 下的多个实例共用一个 run.pid：后启动的实例会覆盖它。
+// 退出时若不看归属直接删，先退出的实例会把仍在运行的那个实例的记录一起删掉，
+// 之后 `kill $(cat .fakeserver/run.pid)` 就找不到真正在跑的进程了。
+//
+// 文件不存在、内容无法解析、或记录的是别的 pid 时都保持原样并返回 nil——
+// 那不是本进程写的，没有资格删；过期记录由 list 按 IsAlive 识别。
+// 读取与删除之间仍有极小的竞态窗口，对本地开发工具可以接受。
+func RemovePIDFileIfOwned(path string, owner int) error {
+	pid, _, _, err := ReadPIDFile(path)
+	if err != nil || pid != owner {
+		return nil
+	}
+	return RemovePIDFile(path)
+}

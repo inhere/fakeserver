@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -265,47 +266,6 @@ func runServe(opts serveOptions) error {
 
 	addr := fmt.Sprintf("%s:%d", opts.Host, opts.Port)
 
-	// v0.3：注册当前项目 + 写 PID 文件（失败不阻塞 serve）。
-	// 仅当有主配置文件时注册（echo-only 模式跳过）；end-to-end 路径见 design §10。
-	var pidPath string
-	if cfg != nil && len(cfg.SourcePaths) > 0 {
-		mainCfg := cfg.SourcePaths[0]
-		projID := registry.ProjectID(mainCfg)
-		cwd, _ := os.Getwd()
-		pidPath = filepath.Join(cwd, ".fakeserver", "run.pid")
-		envFilePath := filepath.Join(filepath.Dir(mainCfg), config.DefaultEnvFileName)
-		proj := registry.Project{
-			ID:         projID,
-			Name:       filepath.Base(filepath.Dir(mainCfg)),
-			ConfigPath: mainCfg,
-			CWD:        cwd,
-			Envs:       config.ExtractEnvNames(envFilePath),
-			LastEnv:    opts.EnvName,
-			LastPort:   opts.Port,
-			LastRunAt:  time.Now().UTC(),
-			PIDFile:    pidPath,
-		}
-		regPath := userRegistryPath()
-		if rerr := registry.WithLock(regPath+".lock", func() error {
-			reg, lerr := registry.Load(regPath)
-			if lerr != nil {
-				return lerr
-			}
-			registry.Upsert(reg, proj)
-			return registry.Save(regPath, reg)
-		}); rerr != nil {
-			fmt.Fprintf(os.Stderr, "warn: registry write failed: %v\n", rerr)
-		}
-		if werr := registry.WritePIDFile(pidPath, os.Getpid(), opts.Port, proj.LastRunAt); werr != nil {
-			fmt.Fprintf(os.Stderr, "warn: write pid file %s: %v\n", pidPath, werr)
-		}
-		defer func() {
-			if err := registry.RemovePIDFile(pidPath); err != nil {
-				fmt.Fprintf(os.Stderr, "warn: remove pid file %s: %v\n", pidPath, err)
-			}
-		}()
-	}
-
 	var (
 		globals map[string]any
 		osenvWl []string
@@ -361,7 +321,9 @@ func runServe(opts serveOptions) error {
 			emitRouteReload(ring, currentCfg, newCfg)
 			currentCfg = newCfg
 			fmt.Fprintln(os.Stderr, "info: config reloaded; router swapped")
-		})
+		}, config.WithErrorHandler(func(werr error) {
+			fmt.Fprintln(os.Stderr, "warn: config watcher:", werr)
+		}))
 		if err != nil {
 			return fmt.Errorf("watcher init: %w", err)
 		}
@@ -370,13 +332,63 @@ func runServe(opts serveOptions) error {
 
 	srv := &http.Server{Addr: addr, Handler: holder}
 
+	// 先把端口占住，再做任何有副作用的事：端口被占时直接返回，
+	// 不打印 banner、不写注册表、不碰 pid 文件。
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("server failed: %w", err)
+	}
+
+	// v0.3：注册当前项目 + 写 PID 文件（失败不阻塞 serve）。
+	// 必须放在端口监听成功之后：先写再监听的话，端口被占的第二个实例会先覆盖
+	// 正在运行那个实例的 run.pid，退出时再把它删掉。
+	// 仅当有主配置文件时注册（echo-only 模式跳过）；end-to-end 路径见 design §10。
+	var pidPath string
+	if cfg != nil && len(cfg.SourcePaths) > 0 {
+		mainCfg := cfg.SourcePaths[0]
+		projID := registry.ProjectID(mainCfg)
+		cwd, _ := os.Getwd()
+		pidPath = filepath.Join(cwd, ".fakeserver", "run.pid")
+		envFilePath := filepath.Join(filepath.Dir(mainCfg), config.DefaultEnvFileName)
+		proj := registry.Project{
+			ID:         projID,
+			Name:       filepath.Base(filepath.Dir(mainCfg)),
+			ConfigPath: mainCfg,
+			CWD:        cwd,
+			Envs:       config.ExtractEnvNames(envFilePath),
+			LastEnv:    opts.EnvName,
+			LastPort:   opts.Port,
+			LastRunAt:  time.Now().UTC(),
+			PIDFile:    pidPath,
+		}
+		regPath := userRegistryPath()
+		if rerr := registry.WithLock(regPath+".lock", func() error {
+			reg, lerr := registry.Load(regPath)
+			if lerr != nil {
+				return lerr
+			}
+			registry.Upsert(reg, proj)
+			return registry.Save(regPath, reg)
+		}); rerr != nil {
+			fmt.Fprintf(os.Stderr, "warn: registry write failed: %v\n", rerr)
+		}
+		if werr := registry.WritePIDFile(pidPath, os.Getpid(), opts.Port, proj.LastRunAt); werr != nil {
+			fmt.Fprintf(os.Stderr, "warn: write pid file %s: %v\n", pidPath, werr)
+		}
+		defer func() {
+			if err := registry.RemovePIDFileIfOwned(pidPath, os.Getpid()); err != nil {
+				fmt.Fprintf(os.Stderr, "warn: remove pid file %s: %v\n", pidPath, err)
+			}
+		}()
+	}
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	serverErr := make(chan error, 1)
 	go func() {
 		printBanner(os.Stdout, cfg, version(), addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
 	}()

@@ -87,3 +87,54 @@ func TestReadPIDFile_MalformedContent_ReturnsError(t *testing.T) {
 		})
 	}
 }
+
+// 同一 cwd 的多个实例共用 run.pid：先退出的实例不能把仍在运行那个实例的记录删掉。
+
+func TestRemovePIDFileIfOwned_Owner_Removed(t *testing.T) {
+	pidPath := filepath.Join(t.TempDir(), "run.pid")
+	if err := WritePIDFile(pidPath, 1234, 5090, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemovePIDFileIfOwned(pidPath, 1234); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Errorf("own pid file should be removed; stat err=%v", err)
+	}
+}
+
+func TestRemovePIDFileIfOwned_OtherOwner_Kept(t *testing.T) {
+	pidPath := filepath.Join(t.TempDir(), "run.pid")
+	if err := WritePIDFile(pidPath, 5678, 5090, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemovePIDFileIfOwned(pidPath, 1234); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	pid, _, _, err := ReadPIDFile(pidPath)
+	if err != nil {
+		t.Fatalf("pid file of another instance must be kept: %v", err)
+	}
+	if pid != 5678 {
+		t.Errorf("pid=%d, want 5678 left untouched", pid)
+	}
+}
+
+func TestRemovePIDFileIfOwned_NotExist_NoError(t *testing.T) {
+	if err := RemovePIDFileIfOwned(filepath.Join(t.TempDir(), "absent.pid"), 1234); err != nil {
+		t.Errorf("missing file should not be an error: %v", err)
+	}
+}
+
+func TestRemovePIDFileIfOwned_Malformed_Kept(t *testing.T) {
+	pidPath := filepath.Join(t.TempDir(), "run.pid")
+	if err := os.WriteFile(pidPath, []byte("not a pid file"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemovePIDFileIfOwned(pidPath, 1234); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if _, err := os.Stat(pidPath); err != nil {
+		t.Errorf("file we cannot attribute must be kept: %v", err)
+	}
+}
