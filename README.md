@@ -98,8 +98,8 @@ fakeserver serve -c fakeserver.json5 --env dev
 
 启动 HTTP server。常用选项：
 
-- `-p, --port`：监听端口，默认 `5090`
-- `--host`：监听地址，默认 `0.0.0.0`
+- `-p, --port`：监听端口，不传时取配置 `server.port`，都没有则 `5090`
+- `--host`：监听地址，不传时取配置 `server.host`，都没有则 `0.0.0.0`（运行中改配置里的 host/port 不会切换监听地址，需要重启）
 - `-c, --config`：配置文件路径，支持逗号分隔多个文件
 - `-e, --env`：选择 `fakeserver.env.json5` 中的环境段
 - `--var key=value`：覆盖 env 变量，可重复，也支持单个 flag 内逗号分隔
@@ -380,13 +380,15 @@ Web UI 可用于：
 - 在 Routes 页面直接测试接口。
 - 切换 selected scenario，或对单个 route 设置 case override。
 
-安全注意：如果 `server.host` 是 `0.0.0.0` 且 `adminEnabled: true`，调试端点会暴露给局域网。仅本地联调建议使用：
+安全注意：如果实际监听地址是 `0.0.0.0`（来自 `--host` 或配置 `server.host`）且 `adminEnabled: true`，调试端点会暴露给局域网。仅本地联调建议在配置里写：
 
 ```json5
 server: {
   host: "127.0.0.1",
 }
 ```
+
+或者启动时加 `--host 127.0.0.1` 临时覆盖。
 
 ## 模板上下文
 
