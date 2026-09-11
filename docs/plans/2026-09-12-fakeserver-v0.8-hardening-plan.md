@@ -7,7 +7,8 @@
 
 | 阶段 | 内容 | 状态 | job / 提交 |
 |---|---|---|---|
-| 1 | 小修四项（1.1-1.4） | 已完成 | `46a9bb5` / `4f59d3e` / `8b4ad66` / `665bf5c` |
+| 1 | 小修四项（1.1-1.4） | 已完成（验收未通过，见 1R） | `46a9bb5` / `4f59d3e` / `8b4ad66` / `665bf5c` |
+| 1R | 阶段 1 验收返工 | 待开始 | |
 | 2 | fallback 可配置 + admin 默认仅本机（2.1-2.2） | 待开始 | |
 | 3 | 模板两项（3.1-3.2） | 待开始 | |
 
@@ -68,12 +69,33 @@
   改为 fail-closed：请求头渲染失败不转发，返回 502；响应头渲染失败让 `ModifyResponse` 返回错误走 ErrorHandler 返回 502。
   错误体沿用现有 proxy 错误响应格式，写明 route 与出错的头名。两种情况各一条测试。
 
+### 1R 阶段 1 验收返工
+
+2026-09-12 验收：容器内 gofmt / vet / 全量测试 / 全量 `-race` 都通过，版本信息实测正确
+（`make build` 的 `--version` 与横幅为 `0.7.0-22-gd4ef6a5`，普通 `go build` 靠 ReadBuildInfo 兜底为 `v0.7.1-0.20260911172239-d4ef6a522f0e`），
+但以下问题必须修：
+
+1. **计划要求的测试全部缺失**，补齐：
+   - 1.1：recorder 并发测试（多个 goroutine 循环 Subscribe/cancel、Append、CloseSubscribers），验收方会用 `go test -race` 跑；
+   - 1.2：`buildinfo.FromBuildInfo` 单测，覆盖已注入 / 未注入且有 vcs / 未注入且无 vcs / modified；
+   - 1.4：proxy 请求头渲染失败 → 502 且上游**没有收到请求**；响应头渲染失败 → 502。
+2. **proxy 请求头被渲染两次**：handler 里预渲染一遍写回 `req.Header`，Director 里原有的渲染还在并会覆盖预渲染结果；
+   `incr` 这类有状态模板函数每个请求会前进两次，Director 出错时还会往上游请求塞 `X-Fakeserver-Proxy-Render-Error` 头。
+   改为只渲染一次：handler 里构造一次上下文（不要每个头构造一次）、渲染全部请求头，失败即 502；Director 不再渲染，只负责 URL / Host / Path。
+   渲染上下文取 fakeserver 收到的原始请求（stripPathPrefix / rewrite 之前）；若现有测试或文档依赖改写后的路径，按原始请求语义更新并在设计文档写明。
+3. **响应头渲染错误靠字符串前缀识别**（ErrorHandler 里 `strings.HasPrefix(perr.Error(), "response header ")`）：改用自定义错误类型 + `errors.As`。
+4. **CI 的 gofmt 检查失败时不列出文件**：改为先列出不合规文件再失败。
+
+提交：按 1-4 分提交（测试可随对应修复一起提交），不改动阶段 1 以外的条目。
+
 ## 阶段 2：fallback 可配置 + admin 默认仅本机
 
 ### 2.1 未命中路由的返回方式可配置
 
-现状：顶层 `fallback` 只接受 `"echo"`（默认，回显请求、状态 200）或 `"404"`；校验报错却写成 `server.fallback`；
-echo 返回 200，被当作内部服务替身时调用方容易误判为成功。
+现状：顶层 `fallback` 的校验接受 `"echo"`（默认）或 `"404"`，但 **`"404"` 从未实现**：`cfg.Fallback` 只用于默认值、校验和启动横幅，
+`internal/cli/serve.go` 的 `assembleHandler` 无条件 `echo.Mount(r)`，配成 `"404"` 未命中照样回显并返回 200（2026-09-12 实测）。
+校验报错还写成了 `server.fallback`。echo 返回 200，被当作内部服务替身时调用方容易误判为成功。
+所以本条除了新增对象形式，还要把 `"404"` 真正实现：未命中返回 404 + JSON 错误体（含 method 与 path）。
 
 要求：
 - `fallback` 保持兼容字符串 `"echo"` / `"404"`，新增对象形式：
