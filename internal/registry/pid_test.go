@@ -71,10 +71,10 @@ func TestReadPIDFile_NotExist_ReturnsError(t *testing.T) {
 
 func TestReadPIDFile_MalformedContent_ReturnsError(t *testing.T) {
 	cases := map[string]string{
-		"too-few-lines":     "1234\n",
-		"pid-not-numeric":   "abc\n5090\n2026-05-20T10:00:00Z\n",
-		"port-not-numeric":  "1234\nzz\n2026-05-20T10:00:00Z\n",
-		"started-bad-fmt":   "1234\n5090\nnot-a-date\n",
+		"too-few-lines":    "1234\n",
+		"pid-not-numeric":  "abc\n5090\n2026-05-20T10:00:00Z\n",
+		"port-not-numeric": "1234\nzz\n2026-05-20T10:00:00Z\n",
+		"started-bad-fmt":  "1234\n5090\nnot-a-date\n",
 	}
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {

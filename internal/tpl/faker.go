@@ -9,8 +9,9 @@ import (
 
 // fakerFuncs returns the FuncMap that bridges gofakeit into our renderer.
 // design §12.2 splits this into two entry styles:
-//   A. 20 commonly-needed fakeXxx functions (zero-arg or simple-arg)
-//   B. a generic `fake "<name>"` lookup for the long tail
+//
+//	A. 20 commonly-needed fakeXxx functions (zero-arg or simple-arg)
+//	B. a generic `fake "<name>"` lookup for the long tail
 //
 // Seed control happens externally (Task 6's NewRenderer calls gofakeit.Seed
 // once with cfg.Server.FakerSeed before any render). All functions here

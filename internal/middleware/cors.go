@@ -36,8 +36,8 @@ const adminPrefix = "/__fakeserver/"
 // CORS returns the middleware. design §5.4:
 //   - non-OPTIONS: pass through, append CORS response headers
 //   - OPTIONS:
-//     * route handled (status != 404) → keep route response, append headers
-//     * route returned 404            → rewrite to 204 + preflight headers
+//   - route handled (status != 404) → keep route response, append headers
+//   - route returned 404            → rewrite to 204 + preflight headers
 //   - any /__fakeserver/* path        → pass through unchanged
 func CORS(opts CORSOpts) func(http.Handler) http.Handler {
 	allowMethods := strings.Join(defaultIfEmpty(opts.Methods, []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}), ", ")
@@ -134,7 +134,7 @@ type bufferedWriter struct {
 	body   []byte
 }
 
-func (bw *bufferedWriter) Header() http.Header { return bw.header }
+func (bw *bufferedWriter) Header() http.Header  { return bw.header }
 func (bw *bufferedWriter) WriteHeader(code int) { bw.status = code }
 func (bw *bufferedWriter) Write(b []byte) (int, error) {
 	if bw.status == 0 {

@@ -41,7 +41,7 @@ func CompileMatcher(src string) (*Matcher, error) {
 //   - (true,  nil): empty matcher (no when) OR program evaluated true
 //   - (false, nil): program evaluated false
 //   - (false, err): runtime error — caller treats as "no match" and warns
-//                   (design §4.5 cases-error-handling table)
+//     (design §4.5 cases-error-handling table)
 //
 // Calling Evaluate on a nil *Matcher is safe and yields (true, nil) — the
 // same as the empty-source sentinel. This lets callers omit a nil check

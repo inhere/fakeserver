@@ -26,9 +26,10 @@ type Renderer interface {
 
 // NewRenderer constructs the default (text-mode) renderer. Pass through
 // FuncMap-affecting knobs:
-//   globals        — exposed as .config in templates (caller already loaded cfg.Globals)
-//   osenvWhitelist — restricts which OS env keys the osenv() func can read
-//   fakerSeed      — 0 means random; non-zero seeds gofakeit once for reproducibility
+//
+//	globals        — exposed as .config in templates (caller already loaded cfg.Globals)
+//	osenvWhitelist — restricts which OS env keys the osenv() func can read
+//	fakerSeed      — 0 means random; non-zero seeds gofakeit once for reproducibility
 func NewRenderer(globals map[string]any, osenvWhitelist []string, fakerSeed int64) Renderer {
 	seedFaker(fakerSeed)
 	return &textRenderer{funcs: BaseFuncMap(osenvWhitelist)}

@@ -166,7 +166,7 @@ func TestMount_StillSkipsProxyRoute(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{{
 			Method: []string{"*"}, Path: "/api/*rest",
-			Proxy:  &config.ProxyConfig{Target: "http://upstream:8080"},
+			Proxy: &config.ProxyConfig{Target: "http://upstream:8080"},
 		}},
 	}
 	r := rux.New()
