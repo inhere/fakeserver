@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -145,5 +146,114 @@ func TestWatcher_AtomicRenameStillTriggers(t *testing.T) {
 	got := atomic.LoadInt32(&calls)
 	if got < 1 {
 		t.Errorf("atomic rename should trigger at least once; got %d", got)
+	}
+}
+
+// 以下用例覆盖轮询兜底：fsnotify 在 9p/drvfs/NFS/SMB 等挂载上不可靠，监听建立后可能一个事件都不来。
+// WSL2 容器 /d 盘实测：上面这组用例在 /tmp 全过、放到 /d 上回调次数全是 0；长时间运行的实例改配置
+// 不再重载，新起的实例却能收到——时好时坏，所以不能只靠事件。
+
+func TestWatcher_PollingDetectsChangeWithoutNotify(t *testing.T) {
+	tmp := t.TempDir()
+	fp := filepath.Join(tmp, "cfg.json5")
+	if err := os.WriteFile(fp, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var calls int32
+	w, err := NewWatcher([]string{fp}, 100*time.Millisecond, func() {
+		atomic.AddInt32(&calls, 1)
+	}, withoutNotify(), WithPollInterval(50*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	// 换一个长度不同的内容：即使 mtime 精度很粗，size 也能区分出变化
+	if err := os.WriteFile(fp, []byte(`{"changed":true}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("poll-only watcher should detect the write once; got %d", got)
+	}
+}
+
+func TestWatcher_PollingNoSpuriousCallback(t *testing.T) {
+	tmp := t.TempDir()
+	fp := filepath.Join(tmp, "cfg.json5")
+	if err := os.WriteFile(fp, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var calls int32
+	w, err := NewWatcher([]string{fp}, 50*time.Millisecond, func() {
+		atomic.AddInt32(&calls, 1)
+	}, withoutNotify(), WithPollInterval(30*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	time.Sleep(300 * time.Millisecond)
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Errorf("unchanged file must not trigger reload; got %d callbacks", got)
+	}
+}
+
+// fsnotify 与轮询同时开着时，一次保存只能重载一次：事件路径会先刷新轮询基线。
+func TestWatcher_NotifyAndPollSingleReload(t *testing.T) {
+	tmp := t.TempDir()
+	fp := filepath.Join(tmp, "cfg.json5")
+	if err := os.WriteFile(fp, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var calls int32
+	w, err := NewWatcher([]string{fp}, 100*time.Millisecond, func() {
+		atomic.AddInt32(&calls, 1)
+	}, WithPollInterval(50*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	if err := os.WriteFile(fp, []byte(`{"once":1}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// 覆盖若干个轮询周期 + 防抖窗口
+	time.Sleep(600 * time.Millisecond)
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("one save should reload exactly once with notify+poll; got %d", got)
+	}
+}
+
+// 一直存在的 stat 错误要报出来，而且只报一次，不能每个轮询周期刷屏。
+func TestWatcher_ReportsStatErrorOnce(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("relies on ENOTDIR, which Windows reports as not-exist")
+	}
+	tmp := t.TempDir()
+	notDir := filepath.Join(tmp, "plain-file")
+	if err := os.WriteFile(notDir, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// 父路径是普通文件：stat 得到 ENOTDIR，而不是"文件不存在"
+	fp := filepath.Join(notDir, "cfg.json5")
+
+	var reports int32
+	w, err := NewWatcher([]string{fp}, 50*time.Millisecond, func() {},
+		withoutNotify(), WithPollInterval(30*time.Millisecond),
+		WithErrorHandler(func(error) { atomic.AddInt32(&reports, 1) }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	time.Sleep(250 * time.Millisecond)
+	if got := atomic.LoadInt32(&reports); got != 1 {
+		t.Errorf("persistent stat error should be reported exactly once; got %d", got)
 	}
 }
