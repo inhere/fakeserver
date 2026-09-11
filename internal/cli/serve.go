@@ -169,7 +169,7 @@ func adminLocalOnly(next http.Handler) http.Handler {
 				host = h
 			}
 			ip, err := netip.ParseAddr(host)
-			if err != nil || (!ip.IsLoopback() && host != "192.0.2.1") {
+			if err != nil || !ip.IsLoopback() {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte(`{"error":"admin 端点仅限本机访问，如需远程访问设置 server.adminAllowRemote: true"}`))

@@ -49,6 +49,7 @@ func TestServeV07_ScenarioControlE2E(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	apiReq := httptest.NewRequest("PUT", "/__fakeserver/api/scenario/overrides", strings.NewReader(`{"method":"GET","path":"/api/users","caseName":"server-error","mode":"next"}`))
+	apiReq.RemoteAddr = "127.0.0.1:1234"
 	apiReq.Header.Set("Content-Type", "application/json")
 	handler.ServeHTTP(rr, apiReq)
 	if rr.Code != http.StatusOK {

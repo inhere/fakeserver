@@ -765,7 +765,7 @@ func Mount(r *rux.Router) {
 | `GET /__fakeserver/api/history` | v0.4 | 最近 N 条请求 |
 | `GET /__fakeserver/events` | v0.4 | SSE 实时请求流 |
 
-`server.adminEnabled: false` 关闭全部 `/__fakeserver/*` 端点（含 ui）。`server.adminAllowRemote` 默认 false，非回环来源访问 admin/API/UI/SSE 返回 403；healthz 保持跨来源可达。经端口映射从其他机器或容器打开 UI 时设置为 true。
+`server.adminEnabled: false` 关闭全部 `/__fakeserver/*` 端点（含 ui）。`server.adminAllowRemote` 默认 false，非回环来源访问 admin/API/UI/SSE 返回 403；healthz 保持跨来源可达。判断只使用连接的 `RemoteAddr`，不信任 `X-Forwarded-For`。经端口映射从其他机器或容器打开 UI 时设置为 true；监听非回环地址且放开时启动与 doctor 都会警告。
 
 退出信号（SIGINT/SIGTERM）：停止接受新连接，等待在途请求最多 5s 再退出；删除 PID 文件；更新 registry 的 `lastRunAt`。
 
@@ -1349,4 +1349,3 @@ v0.2–v0.4 无新增第三方依赖，仅靠标准库实现。
 - 启动版本优先使用构建注入的 `Version`，直接 `go run`/`go install` 时从 `runtime/debug` 的模块与 VCS 信息兜底，并显示短提交号。
 - Proxy 请求头或响应头模板渲染失败均 fail-closed，返回 502 JSON 错误，包含 route 与出错头名；不会静默丢弃头部。
 - recorder 广播发送与订阅关闭共用 `subsMu`，避免并发关闭导致 panic。
-
