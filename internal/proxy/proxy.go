@@ -114,6 +114,8 @@ func Build(route *config.Route, routeIndex int, renderer tpl.Renderer, envMap ma
 	rp := &httputil.ReverseProxy{
 		Transport: transport,
 		Director: func(req *http.Request) {
+			// Request headers are rendered by the handler before Director runs.
+			// Director only applies the upstream URL, host, and path mapping.
 			// 1. URL scheme + host
 			req.URL.Scheme = targetURL.Scheme
 			req.URL.Host = targetURL.Host
