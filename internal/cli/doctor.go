@@ -94,6 +94,15 @@ func runDoctor(opts doctorOptions) error {
 		}
 		findings = append(findings, doctorFinding{Level: "FAIL", Area: area, Message: verr.Error(), Fix: fix})
 	}
+	for _, verr := range config.StrictBodyFiles(cfg) {
+		bodyFileFailed = true
+		findings = append(findings, doctorFinding{
+			Level:   "FAIL",
+			Area:    "bodyFile",
+			Message: verr.Error(),
+			Fix:     "create the fixture file or update bodyFile to the correct relative path",
+		})
+	}
 	if !bodyFileFailed {
 		findings = append(findings, doctorFinding{Level: "OK", Area: "bodyFile", Message: "all configured bodyFile paths exist"})
 	}

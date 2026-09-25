@@ -63,6 +63,38 @@ func TestRunDoctor_MissingBodyFile(t *testing.T) {
 	}
 }
 
+// TestRunDoctor_MissingCaseBodyFile doctor 与 check --strict 同步：
+// case 级 bodyFile 缺失也要报 FAIL bodyFile。
+func TestRunDoctor_MissingCaseBodyFile(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "fakeserver.json5")
+	body := `{
+		routes: [{
+			method: "POST",
+			path: "/tasks",
+			strategy: "first-match",
+			cases: [
+				{ name: "ok", bodyFile: "missing-case.json" },
+			],
+		}],
+	}`
+	if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	err := runDoctor(doctorOptions{cwd: tmp, configFlag: "fakeserver.json5", out: &buf})
+	if err == nil {
+		t.Fatal("expected missing case bodyFile to fail")
+	}
+	out := buf.String()
+	for _, want := range []string{"FAIL bodyFile", "POST /tasks", "ok"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("doctor output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestRunDoctor_AdminExposureWarn(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "fakeserver.json5")

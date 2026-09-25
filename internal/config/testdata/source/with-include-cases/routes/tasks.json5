@@ -1,0 +1,13 @@
+[
+  {
+    method: "POST",
+    path: "/tasks",
+    strategy: "first-match",
+    cases: [
+      // 存在：routes/tasks-ok.json（只在 include 目录下有）
+      { name: "ok", when: 'request.body.task_no == "T-1"', bodyFile: "tasks-ok.json" },
+      // 不存在：routes/tasks-missing.json（根目录的同名文件是诱饵）
+      { name: "missing", bodyFile: "tasks-missing.json" },
+    ],
+  },
+]

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"text/template"
 
@@ -40,14 +41,15 @@ func (p StrictProblem) Error() string {
 }
 
 // StrictValidate performs best-effort checks that are too expensive or too
-// contextual for Validate: parsing route/case header and body templates and
-// attaching hints for common authoring mistakes.
+// contextual for Validate: case-level bodyFile existence (StrictBodyFiles) and
+// parsing route/case header and body templates, attaching hints for common
+// authoring mistakes.
 func StrictValidate(cfg *Config) []error {
 	if cfg == nil {
 		return []error{fmt.Errorf("strict: config is nil")}
 	}
+	errs := StrictBodyFiles(cfg)
 	funcs := tpl.BaseFuncMap(cfg.Server.OSEnvWhitelist)
-	var errs []error
 	for ri, route := range cfg.Routes {
 		method := strings.Join(route.Method, ",")
 		base := StrictProblem{
@@ -99,6 +101,53 @@ func StrictValidate(cfg *Config) []error {
 		}
 	}
 	return errs
+}
+
+// StrictBodyFiles reports case-level bodyFile targets that cannot be stat'ed.
+// Route-level bodyFile is already a hard error in Validate; case-level ones are
+// only checked here (check --strict, doctor) so that a config which used to
+// serve fine keeps working outside strict mode.
+//
+// Relative paths resolve against the source file of the route's own JSON5 file
+// (Route.SourceFile), so a case declared in an @included file resolves against
+// that include's directory — same rule as the route-level check.
+func StrictBodyFiles(cfg *Config) []error {
+	if cfg == nil {
+		return []error{fmt.Errorf("strict: config is nil")}
+	}
+	var errs []error
+	for ri, route := range cfg.Routes {
+		if len(route.Cases) == 0 {
+			continue
+		}
+		for ci, cs := range route.Cases {
+			if cs.BodyFile == "" {
+				continue
+			}
+			resolved := resolveRoutePath(cs.BodyFile, route.SourceFile, cfg.SourcePaths)
+			if _, err := os.Stat(resolved); err != nil {
+				errs = append(errs, StrictProblem{
+					Source:     route.SourceFile,
+					RouteIndex: ri,
+					CaseIndex:  ci,
+					Method:     strings.Join(route.Method, ","),
+					Path:       route.Path,
+					Field:      fmt.Sprintf("cases[%d].bodyFile", ci),
+					Message:    fmt.Sprintf("case %s bodyFile %q not found (resolved to %q)", caseLabel(cs.Name, ci), cs.BodyFile, resolved),
+				})
+			}
+		}
+	}
+	return errs
+}
+
+// caseLabel renders a case name for diagnostics, falling back to its index for
+// unnamed cases.
+func caseLabel(name string, idx int) string {
+	if name == "" {
+		return fmt.Sprintf("#%d", idx)
+	}
+	return fmt.Sprintf("%q", name)
 }
 
 func parseTemplateStrict(src string, funcs template.FuncMap) error {

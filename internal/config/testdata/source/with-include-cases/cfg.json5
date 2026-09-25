@@ -1,0 +1,9 @@
+{
+  // Case-level bodyFile 必须按「所在 route 文件」的目录解析：
+  // routes/tasks.json5 里的相对路径 → testdata/source/with-include-cases/routes/。
+  // 根目录下故意留一个同名 tasks-missing.json（诱饵），若实现错误地按根配置目录
+  // 解析就会漏报。
+  routes: [
+    "@routes/tasks.json5",
+  ],
+}
