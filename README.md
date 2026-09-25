@@ -11,6 +11,8 @@ It is distributed as a single Go binary. The current implementation provides:
 - Go templates with request context, environment variables, random/time/UUID/Faker helpers, and type-preserving `jsonValue` values.
 - `cases`, matching strategies, and named scenarios for switching business states.
 - Per-route reverse proxying, so mocked and real APIs can run together.
+- Declarative pagination (`paginate`) that slices a list in the response body by the page requested.
+- Optional JSONL request-history persistence, with request/response bodies when asked for.
 - Hot reload with filesystem notifications and polling fallback.
 - A built-in Web UI, request history ring buffer, route replay, scenario controls, and request/reload SSE events.
 - Project registration through `list` and `use`, plus `check` and `doctor` diagnostics.
@@ -85,6 +87,7 @@ list     List registered projects and their running/idle status.
 routes   Print a route summary without starting the server.
 serve    Start the HTTP server.
 use      Mark a registered project as the most recently used project.
+version  Print version information; --json emits machine-readable fields.
 ```
 
 Useful `serve` options:
@@ -97,6 +100,14 @@ Useful `serve` options:
 - `--no-watch`: disable hot reload (the default watcher combines fsnotify with one-second polling).
 - `--no-cors`: disable CORS middleware.
 - `-q, --quiet`: suppress request access logs.
+- `--history-file <path>`: append every request to this JSONL file (overrides `server.historyFile`; opened for append, never truncated).
+- `--history-body`: also record request/response bodies in that file (overrides `server.historyBody`).
+
+```bash
+fakeserver version [--json]
+```
+
+`fakeserver version` prints the same text as `--version`; `version --json` prints `{"version","commit","buildTime","goVersion"}`.
 
 ## Configuration
 
@@ -123,9 +134,11 @@ Minimal example:
 
 Routes may be declared inline or included with `@path/to/file.json5`; include paths are relative to the containing config file. `bodyFile` paths are relative to the route file.
 
+`check --strict` validates route-level and case-level `bodyFile` targets; `doctor` reports missing case-level `bodyFile` too.
+
 Top-level fields include:
 
-- `server`: listen settings, CORS and access logging, request-body limits, admin/UI, history/capture, and the default scenario.
+- `server`: listen settings, CORS and access logging, request-body limits, admin/UI, history (`historySize`, `historyFile`, `historyBody`, `historyBodyMaxSize`), capture, and the default scenario.
 - `globals`: values available to templates.
 - `routes`: mock and proxy route declarations.
 - `scenarios`: named mappings from `METHOD /path` to a route case.
@@ -166,6 +179,12 @@ Scenario precedence is `X-Fakeserver-Scenario` header, Web UI selection, `--scen
 curl -H "X-Fakeserver-Scenario: serverErrors" http://127.0.0.1:5090/api/users
 ```
 
+`when` expressions:
+
+- `check` (with or without `--strict`) precompiles every `when`; syntax errors are reported with the route (`METHOD /path`) and the case name.
+- A missing field (expr yields `nil`) is a normal non-match, not an error.
+- A runtime evaluation failure (type error / evaluator error) still degrades to "no match", but is no longer silent: the access log line gains `when_error=<case>:<reason>`, the history entry records `whenError` (visible in the Web UI request detail), and the 500 body returned when no case matches lists each case under `unmatched` (names only) and `whenErrors` (with reasons).
+
 Proxy routes forward selected methods to a real backend. `proxy` is mutually exclusive with mock response fields such as `body`, `bodyFile`, `cases`, `status`, `headers`, and `delay`.
 
 ```json5
@@ -180,6 +199,45 @@ Proxy routes forward selected methods to a real backend. `proxy` is mutually exc
   },
 }
 ```
+
+## Declarative pagination
+
+`paginate` makes fakeserver slice a list inside the response body by the page requested:
+
+```json5
+{
+  method: "POST", path: "/mes-order/device-task",
+  paginate: {
+    pageField: "current",   // page field in the request body/query (default "current")
+    sizeField: "size",      // page-size field in the request body/query (default "size")
+    listPath: "data.list",  // required: dot path of the list inside the response body
+    totalPath: "data.total" // optional: receives the pre-slice length
+  },
+  body: { data: { current: 1, size: 50, total: 0, list: [/* full list */] }, status: 200, code: 0 },
+}
+```
+
+- The page comes from the request body first, then the query string; a missing (or oversized) page size returns the whole list as one page.
+- Out-of-range pages return an empty list; `totalPath` is filled only where it already exists.
+- Combined with `cases`, the case is selected first and then paginated; a case inherits the route-level `paginate` unless it declares its own.
+- The list may come from `body` or from `bodyFile`.
+- An unresolvable `listPath` (or a non-JSON body) returns 500 with a `paginate error` instead of silently serving unpaginated data.
+
+## Request history persistence
+
+Beyond the in-memory history, every request can be appended to a JSONL file:
+
+```json5
+server: {
+  historyFile: ".fakeserver/history.jsonl",
+  historyBody: false,          // true also records request/response bodies
+  historyBodyMaxSize: "64KiB", // per-body cap, default 64KiB
+}
+```
+
+`--history-file <path>` and `--history-body` override these (CLI wins). The file is opened for append and never truncated; each line is one JSON object with the same fields as the Web UI history entry (time, method, path, status, duration, client, matched route/case, proxy target, `whenError`). With `historyBody` the line also carries request/response bodies (flagged `truncated: true` past the cap); `Authorization`, `Cookie`, `X-*-Key`, and `X-*-Token` headers are always redacted. Write failures only warn and never affect serving.
+
+> Changing `server.historyFile` at runtime requires a restart.
 
 ## Environment files and templates
 
@@ -209,7 +267,7 @@ When `server.adminEnabled` is true, fakeserver mounts:
 
 Admin and UI requests are restricted to loopback clients by default. `GET /__fakeserver/healthz` remains reachable from any source. To open the UI from another machine or from a container through a port mapping, set `server.adminAllowRemote: true`. If the server listens on a non-loopback address and remote admin access is enabled, fakeserver prints a warning. Keep `adminEnabled` disabled or bind to `127.0.0.1` for local-only use.
 
-The UI displays routes, config, projects, and request history; shows matched route/case and proxy details; copies and replays curl requests; tests routes; and changes the selected scenario or per-route case override.
+The UI displays routes, config, projects, and request history; shows matched route/case, proxy details, and `when` evaluation errors; copies and replays curl requests; tests routes; and changes the selected scenario or per-route case override.
 
 ## Development
 

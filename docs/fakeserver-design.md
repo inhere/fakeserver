@@ -26,6 +26,7 @@
 | 2026-05-21 | v0.5-devex-applied | inhere | v0.5：开发体验增强，含 init --full、check --strict、doctor、banner UI/env 信息、运行期错误上下文 |
 | 2026-05-21 | v0.6-debug-console-applied | inhere | v0.6：Web UI 调试台，含 history detail、route metadata、capture、copy curl、replay、route tester |
 | 2026-05-22 | v0.7-scenario-control-applied | inhere | v0.7：场景与异常态控制，含 case name、scenario 配置、CLI/header/UI 优先级、runtime override store、Web UI 控制 |
+| 2026-09-25 | v0.8.1-enhance-applied | omp | v0.8.1：假中央使用反馈落地——check --strict 校验 case 级 bodyFile（doctor 同步）；when 运行时错误不再静默（访问日志 when_error、history 记录、Web UI 详情、500 体 unmatched/whenErrors）；请求历史 JSONL 落盘（server.historyFile/historyBody + CLI flag，凭据头脱敏）；`version` 子命令（--json）；route/case 声明式 `paginate` 分页 |
 
 后续修订请按时间倒序追加。每次评审/落地变更必须更新本表，并在对应章节内打 `(v0.X 修订)` 锚点。
 
@@ -298,6 +299,14 @@ func (r *Ring) Subscribe() (<-chan Entry, func())
     },
   ],
 
+  // ── 声明式分页（v0.8.1 新增；route 与 case 都可写，case 覆盖 route）──
+  paginate: {
+    pageField: "current",    // 请求体优先、查询参数次之；缺省 current
+    sizeField: "size",       // 缺省 size；缺省值或缺省字段视为整表一页
+    listPath: "data.list",   // 必填：响应体里列表的点路径
+    totalPath: "data.total", // 可选：写入切片前总数（路径已存在时才写）
+  },
+
   // ── Proxy 模式（与 mock 字段全部互斥）── 详见 § 9
   proxy: {
     target: "http://real-backend.local:8080",
@@ -310,8 +319,9 @@ func (r *Ring) Subscribe() (<-chan Entry, func())
 
 - 同时出现 `body` 和 `bodyFile` → 报错
 - 同时出现 `cases` 与顶层 `body/bodyFile` → 报错
-- 出现 `proxy` 字段时，**`body`/`bodyFile`/`cases`/`status`/`headers`/`delay` 中任一存在都报错**（proxy 与 mock 不混用）
-- `cases[i]` 可独立设 `status/headers/delay/body/bodyFile`，未设则继承外层默认
+- 出现 `proxy` 字段时，**`body`/`bodyFile`/`cases`/`status`/`headers`/`delay`/`paginate` 中任一存在都报错**（proxy 与 mock 不混用）
+- `paginate` 必须写 `listPath`；`paginate` 与 `cases` 可组合（先选 case 再分页）
+- `cases[i]` 可独立设 `status/headers/delay/body/bodyFile/paginate`，未设则继承外层默认
 
 **路由优先级**：精确路径 > 命名参数路径 > 通配路径（由 rux radix tree 保证；配置文件出现顺序不影响优先级）。同一条 route 内的多个 case 按 `strategy` 选择。**跨条目重复的 `method+path` 在启动期报错**（见 §3.4）。mock 路由与 proxy 路由共用同一 router，可在精确 mock 路径上"截胡"被 proxy 通配的范围。
 
@@ -431,12 +441,13 @@ example/
 配置加载完成后、注册 rux 路由前一次性校验，错误集中报出：
 
 - 必填字段缺失
-- `body` / `bodyFile` / `cases` / `proxy` 互斥冲突
-- `bodyFile` 指向不存在的文件
+- `body` / `bodyFile` / `cases` / `proxy` / `paginate` 互斥冲突
+- `bodyFile` 指向不存在的文件（路由级为硬错误；case 级由 `check --strict` 与 `doctor` 报出，保持非 strict 路径向后兼容）
+- `paginate.listPath` 缺失
 - include 路径 / glob 无匹配
 - 循环 include
 - **跨条目 `method+path` 重复**（详见 §3.4）
-- 表达式 `when` 语法错误（expr 编译期检查）
+- 表达式 `when` 语法错误（expr 编译期检查，错误带 `METHOD /path` 与 case 名）
 - 模板语法错误（预编译失败）
 - 用户路由覆盖保留前缀 `/__fakeserver/*` → 拒绝并报错
 - proxy.target 解析失败（非 http/https scheme）→ 报错
@@ -702,6 +713,9 @@ fsnotify 事件到达时先刷新轮询基线，保证一次保存只重载一�
 
 > [v0.4] 同一份记录同时写入 `recorder.Ring`，供 web UI 查看与 SSE 推送。
 
+> [v0.8.1] `when` 求值出错时该行追加 `when_error=<case>:<原因>`（仅取错误首行，保证一行一请求）；
+> `server.historyFile` 开启时同一份 entry 追加写入 JSONL 文件（见 §11.4）。
+
 ### 5.4 CORS *(v0.3 修订)*
 
 默认开启，等价于：
@@ -774,12 +788,13 @@ func Mount(r *rux.Router) {
 
 | 子命令 | 期号 | 用法 / 行为 |
 |---|---|---|
-| `serve` | v0.1 | 启动 server（主命令），前台运行，Ctrl+C 退出。支持 `-c/--config`、`-p/--port`、`-e/--env`、`--var`、`--quiet`、`--no-cors`、`--no-watch` |
+| `serve` | v0.1 | 启动 server（主命令），前台运行，Ctrl+C 退出。支持 `-c/--config`、`-p/--port`、`-e/--env`、`--var`、`--quiet`、`--no-cors`、`--no-watch`；v0.8.1 增 `--history-file`、`--history-body` |
 | `init` | v0.1 | 在 CWD 生成 `./fakeserver.json5` 模板（含 2–3 个示例 route 与注释）。**目标文件已存在则报错退出，不覆盖**。可选 `--with-env` 同时生成 `fakeserver.env.json5`（含 `$default` + `dev` 段） |
 | `check` | v0.1 | 仅做配置校验，不启动 server（CI 友好）；与 `serve` 同样支持 `-c`、`-e` |
 | `routes` | v0.1 | 离线打印路由摘要（不启动 server） |
 | `list` | v0.3 | 列出 `~/.config/fakeserver/projects.json` 中所有项目 + running 状态 |
 | `use <id>` | v0.3 | 切换 lastActiveId（不启动；与 `list` 配合，决定 web UI 默认聚焦） |
+| `version` | v0.8.1 | 输出与 `--version` 相同文本；`--json` 输出 `{version,commit,buildTime,goVersion}` |
 
 ---
 
@@ -792,8 +807,10 @@ func Mount(r *rux.Router) {
 | 热加载（运行时） | 任何上面错误 | 保留旧表 + stderr 警告，**不退出** |
 | 请求处理 panic | 任意 | recoverer 中间件捕获 → 500 JSON + 栈打到 stderr |
 | 模板执行 err | 函数返回 err / fail() / 超时 | 500 + `{error, detail, route}` |
-| 表达式 when 求值 err | 类型错 / 字段缺失 | 视为不匹配，继续下个 case；warn 日志 |
-| cases 全部不匹配 | first-match 无兜底 / random 等过滤后空集 | 500 + `{error: "no case matched", route}` |
+| 表达式 when 求值 err | 类型错 / 求值异常 | 视为不匹配，继续下个 case；stderr warn + 访问日志 `when_error=<case>:<err>` + history entry `whenError`（不再静默） |
+| 表达式 when 求值 nil | 字段缺失 | 与"不匹配"完全一致，不记错误 |
+| cases 全部不匹配 | first-match 无兜底 / random 等过滤后空集 | 500 + `{error: "no case matched", route, unmatched: [case...], whenErrors: [{case, error}...]}`（`whenErrors` 只在出错时出现） |
+| paginate 失败 | listPath 不可解析 / 响应体非 JSON | 500 + `{error: "paginate error", detail, route, field: "paginate"}` |
 | bodyFile 读失败 | 文件被删 / 权限 | 500 + 路径写日志 |
 | 请求超限 | body 超 maxBodySize | 413 在中间件层返回，不进 handler |
 | proxy 上游错误 | 拨号失败 / 超时 / 5xx | 默认透传上游响应；拨号失败返回 502 + `{error, route, target}` |
@@ -1125,9 +1142,11 @@ data: {"added":["GET /v2"], "removed":[], "changed":["GET /me"]}
 
 ### 11.4 请求历史的数据来源
 
-请求日志中间件在写 stdout 的同时，调用 `recorder.Ring.Append(Entry)`，环形缓冲容量 = `server.historySize`（默认 200）。历史不持久化（重启清空）；持久化属于 v1.x 功能。
+请求日志中间件在写 stdout 的同时，调用 `recorder.Ring.Append(Entry)`，环形缓冲容量 = `server.historySize`（默认 200）。环形缓冲本身不持久化（重启清空）。
 
-每个 `Entry` 含：时间戳、method、path、status、duration、client IP、命中 route 索引、命中 case 索引（如适用）、proxy target（如适用）。**不包含请求/响应 body**（隐私 + 体积）。如需 body 详情，路线图考虑增加 "debug capture" 开关（v1.x）。
+每个 `Entry` 含：时间戳、method、path、status、duration、client IP、命中 route 索引、命中 case 索引（如适用）、case name、scenario、override source、proxy target、`whenError`（when 求值出错时）。**默认不包含请求/响应 body**（隐私 + 体积）；`server.capture.enabled` 打开后 entry 带 capture（v0.6 调试台）。
+
+> [v0.8.1] 历史落盘（JSONL）：`server.historyFile` 或 `--history-file` 指定文件，启动时按 append 打开、逐行追加同一 `Entry`（含 ring 分配的 `id`），不覆盖既有内容；写失败只 warn。`server.historyBody` / `--history-body` 额外写入请求体与响应体，每个 body 按 `server.historyBodyMaxSize`（默认 64KiB）截断并标 `truncated: true`；capture 同时开启时共用 capture 的截断上限。未开 `historyBody` 时文件行不带 body。header 里 `Authorization`/`Cookie`/`X-*-Key`/`X-*-Token` 始终脱敏。运行中改 `historyFile` 需重启。
 
 ### 11.5 SSE 实时推送
 
@@ -1345,6 +1364,14 @@ if seed == 0 {
 | **v1.x** | 录制-回放、json-server 风格资源 CRUD、debug capture、Web UI dark mode/写操作、**静态目录服务**（`{ path:"/static/*rest", static:"./public" }`）、JSON 字段顺序稳定化、日志 JSON 格式 | — | — |
 
 v0.2–v0.4 无新增第三方依赖，仅靠标准库实现。
+### v0.8.1 增强补充（假中央使用反馈）
+
+1. **静态诊断补齐**：`check --strict` 与 `doctor` 都校验 case 级 `bodyFile`（相对路径按该 case 所在 route 文件目录解析，报错带 `METHOD /path` 与 case 名）；`check`（非 strict 亦）预编译所有 `when`，语法错误带 route/case。
+2. **when 求值错误不再静默**：字段缺失（nil）仍按普通不匹配；类型错/求值异常在访问日志行追加 `when_error=<case>:<首行>`、写入 history entry 的 `whenError`、在 Web UI 请求详情展示，并在"全部 case 不匹配"的 500 体里用 `unmatched`（只列名字）与 `whenErrors`（带原因）列出各 case 结果。
+3. **请求历史落盘**：`server.historyFile` / `--history-file` + `server.historyBody` / `--history-body`，JSONL 一行一请求、字段同内存 entry，default 64KiB 截断、凭据头默认脱敏、append 不覆盖、写失败仅 warn。
+4. **`version` 子命令**：与 `--version` 同文本；`--json` 输出 `{version,commit,buildTime,goVersion}`。
+5. **声明式分页**：route/case 级 `paginate`（`pageField`/`sizeField`/`listPath`/`totalPath`），页码取请求体优先、查询参数次之，超出页返回空列表，与 `cases` 组合时先选 case 再分页，`bodyFile` 同样适用。
+
 ### v0.8 加固补充
 
 - 启动版本优先使用构建注入的 `Version`，直接 `go run`/`go install` 时从 `runtime/debug` 的模块与 VCS 信息兜底，并显示短提交号。
