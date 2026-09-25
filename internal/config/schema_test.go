@@ -113,3 +113,24 @@ func containsString(values []string, want string) bool {
 	}
 	return false
 }
+
+func TestApplyDefaults_HistoryFileDefaults(t *testing.T) {
+	cfg := &Config{}
+	applyDefaults(cfg)
+
+	if cfg.Server.HistoryFile != "" {
+		t.Errorf("historyFile must stay empty (disabled) by default, got %q", cfg.Server.HistoryFile)
+	}
+	if cfg.Server.HistoryBody {
+		t.Error("historyBody must default to false")
+	}
+	if cfg.Server.HistoryBodyMaxSize != "64KiB" {
+		t.Errorf("expected default historyBodyMaxSize 64KiB, got %q", cfg.Server.HistoryBodyMaxSize)
+	}
+
+	cfg2 := &Config{Server: ServerOpts{HistoryFile: "h.jsonl", HistoryBodyMaxSize: "1MiB"}}
+	applyDefaults(cfg2)
+	if cfg2.Server.HistoryFile != "h.jsonl" || cfg2.Server.HistoryBodyMaxSize != "1MiB" {
+		t.Errorf("applyDefaults must preserve user values: %+v", cfg2.Server)
+	}
+}

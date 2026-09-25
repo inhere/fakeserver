@@ -21,6 +21,17 @@ type LoggerOptions struct {
 	CaptureEnabled  bool
 	CaptureMaxBytes int64
 	RedactKeys      []string
+
+	// HistoryFile receives one JSONL line per request (nil disables it).
+	// Bodies are only written when HistoryBody is set; other fields match the
+	// in-memory entry.
+	HistoryFile *recorder.HistoryWriter
+	// HistoryBody records request/response bodies in that line. It also turns
+	// capture on when CaptureEnabled is false, so the entry can carry bodies.
+	HistoryBody bool
+	// HistoryMaxBytes caps each recorded body when only HistoryBody is on.
+	// When capture is enabled its CaptureMaxBytes wins (shared capture).
+	HistoryMaxBytes int64
 }
 
 // Logger returns a middleware that writes one access-log line per request
@@ -28,14 +39,22 @@ type LoggerOptions struct {
 //
 //	2026-05-20T15:23:45.123Z GET /users 201 3.2ms
 //
-// When quiet is true and ring is nil, the middleware degrades to a
-// transparent pass-through. When ring is non-nil, every request also
-// produces a recorder.Entry appended to ring (v0.4 Phase 1, design §11.4).
-// The middleware never logs to anything other than out, so callers can
-// route logs to a file, stderr, or any io.Writer without global state.
+// When quiet is true, ring is nil and no history file is configured, the
+// middleware degrades to a transparent pass-through. When ring is non-nil,
+// every request also produces a recorder.Entry appended to ring (v0.4 Phase 1,
+// design §11.4); when opts.HistoryFile is set the same entry is appended to the
+// JSONL history file. The middleware never logs to anything other than out, so
+// callers can route logs to a file, stderr, or any io.Writer without global
+// state.
 func Logger(out io.Writer, opts LoggerOptions, ring *recorder.Ring) func(http.Handler) http.Handler {
-	if (opts.Quiet || out == nil) && ring == nil {
+	if (opts.Quiet || out == nil) && ring == nil && opts.HistoryFile == nil {
 		return func(next http.Handler) http.Handler { return next }
+	}
+	// historyBody alone must be able to capture bodies: reuse the capture path
+	// (one body read serves both the Web UI capture and the history file).
+	if opts.HistoryBody && !opts.CaptureEnabled {
+		opts.CaptureEnabled = true
+		opts.CaptureMaxBytes = opts.HistoryMaxBytes
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,26 +78,41 @@ func Logger(out io.Writer, opts LoggerOptions, ring *recorder.Ring) func(http.Ha
 				}
 				fmt.Fprintln(out, line)
 			}
+			if ring == nil && opts.HistoryFile == nil {
+				return
+			}
+			entry := recorder.Entry{
+				TS:             start.UTC(),
+				Method:         r.Method,
+				Path:           r.URL.Path,
+				Status:         lr.status,
+				DurationMs:     float64(dur.Microseconds()) / 1000.0,
+				ClientIP:       clientIP(r),
+				RouteIndex:     trace.RouteIndex,
+				CaseIndex:      trace.CaseIndex,
+				RouteMode:      trace.RouteMode,
+				RouteSource:    trace.RouteSource,
+				ProxyTarget:    trace.ProxyTarget,
+				Scenario:       trace.Scenario,
+				CaseName:       trace.CaseName,
+				OverrideSource: trace.OverrideSource,
+				WhenError:      trace.WhenError,
+				Request:        finalizeCapture(*reqCap, r.Header.Get("Content-Type"), opts),
+				Response:       finalizeCapture(lr.capture(), lr.Header().Get("Content-Type"), opts),
+			}
 			if ring != nil {
-				ring.Append(recorder.Entry{
-					TS:             start.UTC(),
-					Method:         r.Method,
-					Path:           r.URL.Path,
-					Status:         lr.status,
-					DurationMs:     float64(dur.Microseconds()) / 1000.0,
-					ClientIP:       clientIP(r),
-					RouteIndex:     trace.RouteIndex,
-					CaseIndex:      trace.CaseIndex,
-					RouteMode:      trace.RouteMode,
-					RouteSource:    trace.RouteSource,
-					ProxyTarget:    trace.ProxyTarget,
-					Scenario:       trace.Scenario,
-					CaseName:       trace.CaseName,
-					OverrideSource: trace.OverrideSource,
-					WhenError:      trace.WhenError,
-					Request:        finalizeCapture(*reqCap, r.Header.Get("Content-Type"), opts),
-					Response:       finalizeCapture(lr.capture(), lr.Header().Get("Content-Type"), opts),
-				})
+				entry = ring.Append(entry)
+			}
+			if opts.HistoryFile != nil {
+				if !opts.HistoryBody {
+					// Bodies stay out of the file unless explicitly requested
+					// (headers/sizes metadata is kept).
+					entry.Request.Body = ""
+					entry.Response.Body = ""
+				}
+				if err := opts.HistoryFile.Write(entry); err != nil && out != nil {
+					fmt.Fprintf(out, "warn: history file write: %v\n", err)
+				}
 			}
 		})
 	}
@@ -271,6 +305,20 @@ func isSensitiveName(name string, keys []string) bool {
 		if key != "" && strings.Contains(lower, key) {
 			return true
 		}
+	}
+	return isCredentialHeader(lower)
+}
+
+// isCredentialHeader recognizes credential-carrying headers that are redacted
+// regardless of the configured redactKeys: Authorization, Cookie, and the
+// X-<something>-Key / X-<something>-Token families (design §11.4).
+func isCredentialHeader(lower string) bool {
+	switch lower {
+	case "authorization", "cookie":
+		return true
+	}
+	if strings.HasPrefix(lower, "x-") && (strings.HasSuffix(lower, "-key") || strings.HasSuffix(lower, "-token")) {
+		return true
 	}
 	return false
 }

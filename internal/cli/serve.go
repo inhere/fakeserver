@@ -42,6 +42,12 @@ type serveOptions struct {
 	Scenario     string
 	EnvName      string       // --env / -e <name>; "" → fallback FAKESERVER_ENV → file $active → first segment
 	VarOverrides gcli.Strings // --var key=val (multi-flag accumulating; CSV inside single flag allowed)
+	HistoryFile  string       // --history-file <path>; overrides server.historyFile
+	HistoryBody  bool         // --history-body; overrides server.historyBody
+
+	// historyWriter is run-scoped plumbing opened once in runServe and shared by
+	// every assembleHandler call (initial mount + hot reload). nil = disabled.
+	historyWriter *recorder.HistoryWriter
 }
 
 const (
@@ -102,6 +108,8 @@ func newServeCmd() *gcli.Command {
 			cmd.StrOpt2(&opts.Scenario, "scenario", "Default scenario name for this serve process")
 			cmd.StrOpt2(&opts.EnvName, "env,e", "Environment segment name (override env file $active and FAKESERVER_ENV)")
 			cmd.VarOpt2(&opts.VarOverrides, "var", "Variable override key=val (repeatable; comma-separated allowed)")
+			cmd.StrOpt2(&opts.HistoryFile, "history-file", "Append request history as JSONL to this file (overrides server.historyFile)")
+			cmd.BoolOpt2(&opts.HistoryBody, "history-body", "Also record request/response bodies in the history file (overrides server.historyBody)")
 		},
 		Func: func(cmd *gcli.Command, _ []string) error {
 			return runServe(opts)
@@ -243,7 +251,7 @@ func fallbackHandler(cfg *config.Config, renderer tpl.Renderer) rux.HandlerFunc 
 }
 
 func loggerOptionsFromConfig(cfg *config.Config, opts serveOptions) middleware.LoggerOptions {
-	out := middleware.LoggerOptions{Quiet: opts.Quiet}
+	out := middleware.LoggerOptions{Quiet: opts.Quiet, HistoryFile: opts.historyWriter, HistoryBody: historyBodyEnabled(cfg, opts), HistoryMaxBytes: historyBodyMaxBytes(cfg)}
 	if cfg == nil {
 		return out
 	}
@@ -258,6 +266,61 @@ func loggerOptionsFromConfig(cfg *config.Config, opts serveOptions) middleware.L
 	}
 	out.RedactKeys = cfg.Server.Capture.RedactKeys
 	return out
+}
+
+// resolveHistoryPath returns the JSONL history file to append to: the
+// --history-file flag wins over server.historyFile; "" disables persistence.
+func resolveHistoryPath(cfg *config.Config, opts serveOptions) string {
+	if opts.HistoryFile != "" {
+		return opts.HistoryFile
+	}
+	if cfg == nil {
+		return ""
+	}
+	return cfg.Server.HistoryFile
+}
+
+// historyBodyEnabled reports whether request/response bodies are recorded in
+// the history file (--history-body wins over server.historyBody).
+func historyBodyEnabled(cfg *config.Config, opts serveOptions) bool {
+	if opts.HistoryBody {
+		return true
+	}
+	if cfg == nil {
+		return false
+	}
+	return cfg.Server.HistoryBody
+}
+
+// historyBodyMaxBytes returns the per-body cap for history recording
+// (server.historyBodyMaxSize, default 64KiB). Invalid values fall back to the
+// default instead of blocking startup.
+func historyBodyMaxBytes(cfg *config.Config) int64 {
+	const def = 64 << 10
+	if cfg == nil || cfg.Server.HistoryBodyMaxSize == "" {
+		return def
+	}
+	n, err := sizeparse.ParseByteSize(cfg.Server.HistoryBodyMaxSize)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: historyBodyMaxSize %q: %v; defaulting to 64KiB\n", cfg.Server.HistoryBodyMaxSize, err)
+		return def
+	}
+	return n
+}
+
+// openHistoryWriter opens the history file for appending. Failures are
+// advisory: the caller warns and serves without persistence.
+func openHistoryWriter(path string) *recorder.HistoryWriter {
+	if path == "" {
+		return nil
+	}
+	hw, err := recorder.OpenHistoryFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: history file %s: %v (history persistence disabled)\n", path, err)
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "info: request history appending to %s\n", path)
+	return hw
 }
 
 // parseMaxBodySize tolerates empty/invalid values by returning 1MiB default.
@@ -407,6 +470,13 @@ func runServe(opts serveOptions) error {
 	}
 	ring := recorder.New(historySize)
 	scenarioStore := scenario.NewStore()
+
+	// 请求历史落盘（server.historyFile / --history-file）：启动即按 append 打开，
+	// 不覆盖既有内容；打开失败只 warn，服务照常运行。
+	opts.historyWriter = openHistoryWriter(resolveHistoryPath(cfg, opts))
+	if opts.historyWriter != nil {
+		defer opts.historyWriter.Close()
+	}
 
 	// v0.4 Phase 1：0.0.0.0 + adminEnabled 组合发 WARNING（design §11.6）。
 	if listenHost == "0.0.0.0" && cfg != nil && cfg.Server.AdminEnabled != nil && *cfg.Server.AdminEnabled {

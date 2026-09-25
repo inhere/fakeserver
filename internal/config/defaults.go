@@ -43,6 +43,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.HistorySize == 0 {
 		cfg.Server.HistorySize = 200
 	}
+	if cfg.Server.HistoryBodyMaxSize == "" {
+		cfg.Server.HistoryBodyMaxSize = "64KiB"
+	}
 	if cfg.Fallback == nil || cfg.Fallback == "" {
 		cfg.Fallback = "echo"
 	}

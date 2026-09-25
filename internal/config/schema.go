@@ -49,7 +49,15 @@ type ServerOpts struct {
 	OSEnvWhitelist   []string      `json:"osenvWhitelist"`
 	FakerSeed        int64         `json:"fakerSeed"`
 	HistorySize      int           `json:"historySize"`
-	ProjectName      string        `json:"projectName"`
+	// HistoryFile appends one JSONL line per request to this file
+	// (per-run append, never truncated). "" disables persistence.
+	HistoryFile string `json:"historyFile"`
+	// HistoryBody additionally records request/response bodies in that file.
+	HistoryBody bool `json:"historyBody"`
+	// HistoryBodyMaxSize caps each captured body when only HistoryBody is on
+	// (default 64KiB; server.capture.maxBodySize wins when capture is enabled).
+	HistoryBodyMaxSize string `json:"historyBodyMaxSize"`
+	ProjectName        string `json:"projectName"`
 }
 
 type FallbackConfig struct {

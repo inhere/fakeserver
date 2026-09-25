@@ -70,6 +70,12 @@ func Validate(cfg *Config) []error {
 		}
 	}
 
+	if cfg.Server.HistoryBodyMaxSize != "" {
+		if _, err := sizeparse.ParseByteSize(cfg.Server.HistoryBodyMaxSize); err != nil {
+			errs = append(errs, fmt.Errorf("server.historyBodyMaxSize %q: %w", cfg.Server.HistoryBodyMaxSize, err))
+		}
+	}
+
 	// route-level checks
 	type key struct {
 		method, path string

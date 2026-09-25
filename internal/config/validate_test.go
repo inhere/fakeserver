@@ -444,3 +444,15 @@ func TestLoad_BodyFile_FromIncludedFile_RelativePathResolved(t *testing.T) {
 		t.Fatalf("validate err: %v", errs)
 	}
 }
+
+func TestValidate_HistoryBadMaxBodySize(t *testing.T) {
+	cfg := &Config{
+		Server:   ServerOpts{HistoryBodyMaxSize: "64XB"},
+		Fallback: "echo",
+		Routes:   []Route{{Method: []string{"GET"}, Path: "/x", Body: "ok"}},
+	}
+	errs := Validate(cfg)
+	if !containsErrorWith(errs, "historyBodyMaxSize", "64XB") {
+		t.Fatalf("expected historyBodyMaxSize error, got %v", errs)
+	}
+}

@@ -100,7 +100,8 @@ func (r *Ring) Cap() int {
 }
 
 // Append 写入一条新 Entry。满时覆盖最旧条目。同时向所有订阅者广播 Event{Kind:Request}。
-func (r *Ring) Append(e Entry) {
+// 返回实际入环的那份 Entry（含分配好的 ID），供 history 落盘等旁路消费者复用同一 id。
+func (r *Ring) Append(e Entry) Entry {
 	r.mu.Lock()
 	if e.ID == 0 {
 		r.nextEntryID++
@@ -114,6 +115,7 @@ func (r *Ring) Append(e Entry) {
 	r.mu.Unlock()
 
 	r.broadcast(Event{Kind: EventRequest, Entry: &e})
+	return e
 }
 
 // Get returns the entry with id if it is still retained in the ring.
