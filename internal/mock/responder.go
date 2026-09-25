@@ -253,7 +253,26 @@ func writeError(w http.ResponseWriter, status int, short, detail string, route *
 	writeErrorWithContext(w, status, short, detail, route, "", "")
 }
 
+// writeNoCaseMatched emits the design §6 "no case matched" 500 body plus the
+// per-case diagnostics: plain non-matches are listed by name only, while cases
+// whose when-expression failed to evaluate carry their reason (a when error is
+// never silent — design §4.5 downgrade still means "no match" at runtime).
+func writeNoCaseMatched(w http.ResponseWriter, route *config.Route, unmatched []string, whenErrs []whenCaseError) {
+	extra := map[string]any{}
+	if len(unmatched) > 0 {
+		extra["unmatched"] = unmatched
+	}
+	if len(whenErrs) > 0 {
+		extra["whenErrors"] = whenErrs
+	}
+	writeErrorWithExtras(w, http.StatusInternalServerError, "no case matched", "", route, "", "", extra)
+}
+
 func writeErrorWithContext(w http.ResponseWriter, status int, short, detail string, route *config.Route, field, hint string) {
+	writeErrorWithExtras(w, status, short, detail, route, field, hint, nil)
+}
+
+func writeErrorWithExtras(w http.ResponseWriter, status int, short, detail string, route *config.Route, field, hint string, extra map[string]any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	out := map[string]any{
@@ -269,6 +288,9 @@ func writeErrorWithContext(w http.ResponseWriter, status int, short, detail stri
 	}
 	if hint != "" {
 		out["hint"] = hint
+	}
+	for k, v := range extra {
+		out[k] = v
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }

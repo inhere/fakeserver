@@ -513,3 +513,162 @@ func TestRespondCases_RuntimeWhenError_Skips(t *testing.T) {
 		t.Errorf("when runtime err should skip case; got status %d", resp.StatusCode)
 	}
 }
+
+// TestRespondCases_MissingFieldIsNoMatchNotError 锁定任务书语义：字段缺失
+// （expr 求值为 nil）属于正常不匹配，不产生 when_error 标记。
+func TestRespondCases_MissingFieldIsNoMatchNotError(t *testing.T) {
+	route := &config.Route{
+		Method:   []string{"GET"},
+		Path:     "/e5",
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{Name: "absent", When: `request.query.absent`, Status: 200, Body: "absent"},
+		},
+	}
+	matchers := make([]*Matcher, len(route.Cases))
+	for i, cs := range route.Cases {
+		m, err := CompileMatcher(cs.When)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matchers[i] = m
+	}
+	var trace *recorder.RequestTrace
+	r := rux.New()
+	r.GET("/e5", func(c *rux.Context) {
+		ctx, tr := recorder.WithRequestTrace(c.Req.Context())
+		trace = tr
+		c.Req = c.Req.WithContext(ctx)
+		RespondCases(c, route, 0, matchers, NewSelector(route.Strategy), tpl.NewRenderer(nil, nil, 0), nil)
+	})
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest("GET", "/e5", nil))
+	if resp.Code != 500 {
+		t.Fatalf("missing field case should not match → 500, got %d", resp.Code)
+	}
+	if trace == nil || trace.WhenError != "" {
+		t.Fatalf("missing field must not be flagged as when error, got %+v", trace)
+	}
+	var body struct {
+		Unmatched  []string `json:"unmatched"`
+		WhenErrors []any    `json:"whenErrors"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if len(body.Unmatched) != 1 || body.Unmatched[0] != "absent" {
+		t.Errorf("unmatched=%v want [absent]", body.Unmatched)
+	}
+	if len(body.WhenErrors) != 0 {
+		t.Errorf("whenErrors=%v want empty for a missing field", body.WhenErrors)
+	}
+}
+
+// TestRespondCases_NoMatch_ListsUnmatchedAndWhenErrors 锁定「when 错误不再静默」：
+// 全部 case 不匹配时的 500 响应体里，正常不匹配只列 case 名，出错的那条带原因。
+func TestRespondCases_NoMatch_ListsUnmatchedAndWhenErrors(t *testing.T) {
+	route := &config.Route{
+		Method:   []string{"GET"},
+		Path:     "/e3",
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{Name: "boom", When: `len(request.query.foo) > 100`, Status: 200, Body: "boom"},
+			{Name: "plain", When: `request.query.hit == "yes"`, Status: 200, Body: "plain"},
+		},
+	}
+	matchers := make([]*Matcher, len(route.Cases))
+	for i, cs := range route.Cases {
+		m, err := CompileMatcher(cs.When)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matchers[i] = m
+	}
+	rdr := tpl.NewRenderer(nil, nil, 0)
+	var trace *recorder.RequestTrace
+	r := rux.New()
+	r.GET("/e3", func(c *rux.Context) {
+		ctx, tr := recorder.WithRequestTrace(c.Req.Context())
+		trace = tr
+		c.Req = c.Req.WithContext(ctx)
+		RespondCases(c, route, 2, matchers, NewSelector(route.Strategy), rdr, nil)
+	})
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest("GET", "/e3", nil))
+	if resp.Code != 500 {
+		t.Fatalf("all cases filtered → status %d want 500", resp.Code)
+	}
+	var body struct {
+		Error      string   `json:"error"`
+		Route      string   `json:"route"`
+		Unmatched  []string `json:"unmatched"`
+		WhenErrors []struct {
+			Case  string `json:"case"`
+			Error string `json:"error"`
+		} `json:"whenErrors"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode 500 body: %v (%s)", err, resp.Body.String())
+	}
+	if body.Error != "no case matched" || body.Route != "GET /e3" {
+		t.Fatalf("unexpected error body: %s", resp.Body.String())
+	}
+	if len(body.Unmatched) != 1 || body.Unmatched[0] != "plain" {
+		t.Errorf("unmatched=%v want [plain]", body.Unmatched)
+	}
+	if len(body.WhenErrors) != 1 || body.WhenErrors[0].Case != "boom" {
+		t.Fatalf("whenErrors=%+v want single boom entry", body.WhenErrors)
+	}
+	if !strings.Contains(body.WhenErrors[0].Error, "when") {
+		t.Errorf("whenErrors reason should quote the when source: %q", body.WhenErrors[0].Error)
+	}
+	if trace == nil {
+		t.Fatal("trace was not attached")
+	}
+	if !strings.HasPrefix(trace.WhenError, "boom:") {
+		t.Fatalf("trace.WhenError=%q want boom:<err>", trace.WhenError)
+	}
+}
+
+// TestRespondCases_WhenError_MarksTraceWhenAnotherCaseMatches 锁定兼容性：
+// 某个 case 求值出错仍不改变「跳过并继续」语义，但 trace 上留下 when_error
+// 供访问日志/历史记录标注。
+func TestRespondCases_WhenError_MarksTraceWhenAnotherCaseMatches(t *testing.T) {
+	route := &config.Route{
+		Method:   []string{"GET"},
+		Path:     "/e4",
+		Strategy: "first-match",
+		Cases: []config.RouteCase{
+			{Name: "boom", When: `len(request.query.foo) > 100`, Status: 500, Body: "boom"},
+			{Name: "fallback", Status: 200, Body: "fallback"},
+		},
+	}
+	matchers := make([]*Matcher, len(route.Cases))
+	for i, cs := range route.Cases {
+		m, err := CompileMatcher(cs.When)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matchers[i] = m
+	}
+	rdr := tpl.NewRenderer(nil, nil, 0)
+	var trace *recorder.RequestTrace
+	r := rux.New()
+	r.GET("/e4", func(c *rux.Context) {
+		ctx, tr := recorder.WithRequestTrace(c.Req.Context())
+		trace = tr
+		c.Req = c.Req.WithContext(ctx)
+		RespondCases(c, route, 0, matchers, NewSelector(route.Strategy), rdr, nil)
+	})
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest("GET", "/e4", nil))
+	if resp.Code != 200 {
+		t.Fatalf("fallback case should still answer 200, got %d", resp.Code)
+	}
+	if trace == nil || !strings.HasPrefix(trace.WhenError, "boom:") {
+		t.Fatalf("trace.WhenError=%v, want boom:<err>", trace)
+	}
+}

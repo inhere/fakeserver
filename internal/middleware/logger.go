@@ -50,10 +50,14 @@ func Logger(out io.Writer, opts LoggerOptions, ring *recorder.Ring) func(http.Ha
 			next.ServeHTTP(lr, r)
 			dur := time.Since(start)
 			if !opts.Quiet && out != nil {
-				fmt.Fprintf(out, "%s %s %s %d %s\n",
+				line := fmt.Sprintf("%s %s %s %d %s",
 					start.UTC().Format("2006-01-02T15:04:05.000Z"),
 					r.Method, r.URL.Path, lr.status, dur,
 				)
+				if trace.WhenError != "" {
+					line += " when_error=" + firstLine(trace.WhenError)
+				}
+				fmt.Fprintln(out, line)
 			}
 			if ring != nil {
 				ring.Append(recorder.Entry{
@@ -71,12 +75,23 @@ func Logger(out io.Writer, opts LoggerOptions, ring *recorder.Ring) func(http.Ha
 					Scenario:       trace.Scenario,
 					CaseName:       trace.CaseName,
 					OverrideSource: trace.OverrideSource,
+					WhenError:      trace.WhenError,
 					Request:        finalizeCapture(*reqCap, r.Header.Get("Content-Type"), opts),
 					Response:       finalizeCapture(lr.capture(), lr.Header().Get("Content-Type"), opts),
 				})
 			}
 		})
 	}
+}
+
+// firstLine collapses a possibly multi-line diagnostic (expr errors embed a
+// source excerpt) into its first line so the access log keeps one line per
+// request. The full text stays in the history entry and error bodies.
+func firstLine(s string) string {
+	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
+		s = s[:i]
+	}
+	return s
 }
 
 // clientIP 从 r.RemoteAddr 提取 host 部分（去掉端口）。失败时返回原值。

@@ -2,8 +2,10 @@ package mock
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gookit/rux/v2"
 
@@ -70,22 +72,29 @@ func RespondCasesWithScenario(
 	}
 
 	filtered := make([]SelectorCase, 0, len(route.Cases))
+	var unmatched []string
+	var whenErrs []whenCaseError
 	for i, m := range matchers {
 		ok, err := m.Evaluate(ctx)
 		if err != nil {
 			log.Printf("[mock] %s %s case[%d] when err: %v (skipping)", joinMethods(route), route.Path, i, err)
+			whenErrs = append(whenErrs, whenCaseError{Case: caseName(&route.Cases[i], i), Error: err.Error()})
 			continue
 		}
 		if !ok {
+			unmatched = append(unmatched, caseName(&route.Cases[i], i))
 			continue
 		}
 		filtered = append(filtered, SelectorCase{OrigIdx: i, Weight: route.Cases[i].Weight})
+	}
+	if len(whenErrs) > 0 {
+		recorder.SetRouteMatch(c.Req.Context(), recorder.RequestTrace{WhenError: formatWhenErrors(whenErrs)})
 	}
 
 	pickedIdx, err := selector.Pick(filtered)
 	if err != nil {
 		if errors.Is(err, ErrNoMatch) {
-			writeError(c.Resp, http.StatusInternalServerError, "no case matched", "", route)
+			writeNoCaseMatched(c.Resp, route, unmatched, whenErrs)
 			return
 		}
 		writeError(c.Resp, http.StatusInternalServerError, "selector error", err.Error(), route)
@@ -147,6 +156,32 @@ func caseAsRoute(outer *config.Route, c *config.RouteCase) *config.Route {
 		v.BodyFile = outer.BodyFile
 	}
 	return v
+}
+
+// whenCaseError is one case-level when-expression failure, rendered in the
+// "no case matched" 500 body so a silent skip never hides a broken when.
+type whenCaseError struct {
+	Case  string `json:"case"`
+	Error string `json:"error"`
+}
+
+// formatWhenErrors renders when failures for the access log / history marker:
+// "<case>:<err>", multiple joined by "; ".
+func formatWhenErrors(errs []whenCaseError) string {
+	parts := make([]string, 0, len(errs))
+	for _, e := range errs {
+		parts = append(parts, e.Case+":"+e.Error)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// caseName returns a case's display name for diagnostics/500 bodies, falling
+// back to its index for unnamed cases.
+func caseName(cs *config.RouteCase, idx int) string {
+	if cs == nil || cs.Name == "" {
+		return fmt.Sprintf("#%d", idx)
+	}
+	return cs.Name
 }
 
 func joinMethods(r *config.Route) string {

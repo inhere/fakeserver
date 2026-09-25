@@ -116,7 +116,7 @@ func Validate(cfg *Config) []error {
 				continue
 			}
 			if _, cerr := expr.Compile(cs.When, expr.AsBool()); cerr != nil {
-				errs = append(errs, fmt.Errorf("%s cases[%d].when: %w", prefix, ci, cerr))
+				errs = append(errs, fmt.Errorf("%s %s.when: %w", prefix, caseFieldRef(ci, cs.Name), cerr))
 			}
 		}
 
@@ -188,6 +188,15 @@ func Validate(cfg *Config) []error {
 
 func routeSignature(method, path string) string {
 	return strings.ToUpper(method) + " " + path
+}
+
+// caseFieldRef renders "cases[i]" plus the case name when present, so
+// validation errors name the offending case.
+func caseFieldRef(idx int, name string) string {
+	if name == "" {
+		return fmt.Sprintf("cases[%d]", idx)
+	}
+	return fmt.Sprintf("cases[%d] (%q)", idx, name)
 }
 
 // resolveRoutePath resolves a relative path against the source file of the

@@ -316,3 +316,52 @@ func TestLogger_DoesNotRenderBinaryBody(t *testing.T) {
 		t.Fatalf("response capture=%+v, want binary without body", resp)
 	}
 }
+
+// TestLogger_MarksWhenErrorInAccessLineAndEntry 锁定「when 求值出错不再静默」：
+// 访问日志行追加 when_error=<case>:<err>，history entry 同步记录，且不影响
+// 无错误行（向后兼容）。
+func TestLogger_MarksWhenErrorInAccessLineAndEntry(t *testing.T) {
+	var buf bytes.Buffer
+	ring := recorder.New(4)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recorder.SetRouteMatch(r.Context(), recorder.RequestTrace{WhenError: "boom: invalid argument for len (type <nil>) (1:1)\n | len(x) > 1\n | ^\n | source excerpt"})
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	Logger(&buf, LoggerOptions{}, ring)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		httptest.NewRequest("POST", "/tasks", nil),
+	)
+
+	line := buf.String()
+	if !strings.Contains(line, "when_error=boom:") {
+		t.Fatalf("access line missing when_error marker: %q", line)
+	}
+	if strings.Count(strings.TrimRight(line, "\n"), "\n") != 0 {
+		t.Fatalf("when_error marker must keep the access log to one line: %q", line)
+	}
+	if strings.Contains(line, "source excerpt") {
+		t.Fatalf("marker should only keep the first error line: %q", line)
+	}
+	entries := ring.Snapshot()
+	if len(entries) != 1 {
+		t.Fatalf("want 1 entry, got %d", len(entries))
+	}
+	if !strings.HasPrefix(entries[0].WhenError, "boom:") {
+		t.Fatalf("entry.WhenError=%q", entries[0].WhenError)
+	}
+}
+
+func TestLogger_NoWhenErrorKeepsLineClean(t *testing.T) {
+	var buf bytes.Buffer
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
+	Logger(&buf, LoggerOptions{}, nil)(h).ServeHTTP(
+		httptest.NewRecorder(),
+		httptest.NewRequest("GET", "/plain", nil),
+	)
+	if strings.Contains(buf.String(), "when_error") {
+		t.Fatalf("clean request must not carry a when_error marker: %q", buf.String())
+	}
+}

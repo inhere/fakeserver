@@ -61,3 +61,16 @@ func TestRequestTraceScenarioFields(t *testing.T) {
 		t.Fatalf("OverrideSource=%q", trace.OverrideSource)
 	}
 }
+
+func TestSetRouteMatch_WhenError(t *testing.T) {
+	ctx, trace := WithRequestTrace(context.Background())
+	SetRouteMatch(ctx, RequestTrace{WhenError: `boom: when "x": oops`})
+	if trace.WhenError != `boom: when "x": oops` {
+		t.Fatalf("WhenError=%q", trace.WhenError)
+	}
+	// 空值不覆盖已有标记
+	SetRouteMatch(ctx, RequestTrace{RouteMode: "cases"})
+	if trace.WhenError == "" {
+		t.Fatal("empty WhenError must not clear an existing marker")
+	}
+}

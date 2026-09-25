@@ -36,6 +36,7 @@ type Entry struct {
 	Scenario       string    `json:"scenario,omitempty"`
 	CaseName       string    `json:"caseName,omitempty"`
 	OverrideSource string    `json:"overrideSource,omitempty"`
+	WhenError      string    `json:"whenError,omitempty"`
 	Request        Capture   `json:"request,omitempty"`
 	Response       Capture   `json:"response,omitempty"`
 }

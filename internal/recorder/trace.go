@@ -14,6 +14,12 @@ type RequestTrace struct {
 	Scenario       string
 	CaseName       string
 	OverrideSource string
+	// WhenError records the case-level when-expression evaluation failures seen
+	// while this request was routed ("<case>:<err>"; multiple joined by "; ").
+	// Non-empty means the request log line and history entry carry a
+	// when_error marker (design §4.5 downgrade stays: the case still counts as
+	// a non-match).
+	WhenError string
 }
 
 // WithRequestTrace attaches a mutable trace holder to ctx.
@@ -57,5 +63,8 @@ func SetRouteMatch(ctx context.Context, update RequestTrace) {
 	}
 	if update.OverrideSource != "" {
 		trace.OverrideSource = update.OverrideSource
+	}
+	if update.WhenError != "" {
+		trace.WhenError = update.WhenError
 	}
 }

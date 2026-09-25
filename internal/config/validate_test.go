@@ -241,6 +241,30 @@ func TestValidate_WhenSyntaxError(t *testing.T) {
 	}
 }
 
+// TestValidate_WhenSyntaxError_IncludesRouteAndCaseName 锁定 check 阶段
+// when 语法错误信息带 route 标识与 case 名（case 无名字时退化为下标）。
+func TestValidate_WhenSyntaxError_IncludesRouteAndCaseName(t *testing.T) {
+	cfg := &Config{
+		Fallback: "echo",
+		Routes: []Route{{
+			Method: []string{"POST"}, Path: "/tasks",
+			Cases: []RouteCase{
+				{Name: "broken", When: `request.body.task_no ==`, Status: 200, Body: "a"},
+			},
+		}},
+	}
+	errs := Validate(cfg)
+	if len(errs) != 1 {
+		t.Fatalf("want 1 when-syntax error, got %v", errs)
+	}
+	got := errs[0].Error()
+	for _, want := range []string{"POST /tasks", `cases[0] ("broken")`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("when-syntax error %q should contain %q", got, want)
+		}
+	}
+}
+
 func TestValidate_WhenEmpty_NoError(t *testing.T) {
 	cfg := &Config{
 		Fallback: "echo",

@@ -39,9 +39,10 @@ func CompileMatcher(src string) (*Matcher, error) {
 // Evaluate runs the compiled program against env. Returns:
 //
 //   - (true,  nil): empty matcher (no when) OR program evaluated true
-//   - (false, nil): program evaluated false
-//   - (false, err): runtime error — caller treats as "no match" and warns
-//     (design §4.5 cases-error-handling table)
+//   - (false, nil): program evaluated false, OR it evaluated to nil (a missing
+//     field / absent map key — "字段缺失属正常不匹配", not an error)
+//   - (false, err): runtime or type error — caller treats as "no match" and
+//     records it as when_error (design §4.5 cases-error-handling table)
 //
 // Calling Evaluate on a nil *Matcher is safe and yields (true, nil) — the
 // same as the empty-source sentinel. This lets callers omit a nil check
@@ -57,6 +58,10 @@ func (m *Matcher) Evaluate(env map[string]any) (bool, error) {
 	out, err := expr.Run(m.Program, env)
 	if err != nil {
 		return false, fmt.Errorf("when %q: %w", m.Source, err)
+	}
+	if out == nil {
+		// Missing field (map key absent): normal non-match, not an error.
+		return false, nil
 	}
 	b, ok := out.(bool)
 	if !ok {

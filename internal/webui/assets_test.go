@@ -133,7 +133,7 @@ func TestUIAssets_DebugConsoleContracts(t *testing.T) {
 
 	js := httptest.NewRecorder()
 	router.ServeHTTP(js, httptest.NewRequest(http.MethodGet, "/__fakeserver/ui/main.js", nil))
-	for _, want := range []string{"function buildCurl", "openHistoryDetail", "copy-curl-button"} {
+	for _, want := range []string{"function buildCurl", "openHistoryDetail", "copy-curl-button", "whenError"} {
 		if !strings.Contains(js.Body.String(), want) {
 			t.Fatalf("main.js missing %q", want)
 		}

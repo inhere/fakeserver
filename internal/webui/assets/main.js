@@ -257,6 +257,7 @@
           <div>Route index</div><div>${escapeHTML(entry.routeIndex ?? "-")}</div>
           <div>Case index</div><div>${escapeHTML(entry.caseIndex ?? "-")}</div>
           <div>Case name</div><div>${escapeHTML(entry.caseName || "-")}</div>
+          <div>When error</div><div>${escapeHTML(entry.whenError || "-")}</div>
           <div>Scenario</div><div>${escapeHTML(entry.scenario || "-")}</div>
           <div>Override source</div><div>${escapeHTML(entry.overrideSource || "-")}</div>
           <div>Source</div><div>${escapeHTML(entry.routeSource || "-")}</div>
