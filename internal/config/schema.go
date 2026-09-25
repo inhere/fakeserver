@@ -80,6 +80,24 @@ type CaptureConfig struct {
 	RedactKeys  []string `json:"redactKeys"`
 }
 
+// PaginateConfig declares declarative list pagination for a route/case body
+// (design §3.2 extension): the list at ListPath is sliced by the page/size
+// taken from the request, and the pre-slice length is written to TotalPath.
+type PaginateConfig struct {
+	// PageField names the page field in the request body / query
+	// (default "current").
+	PageField string `json:"pageField"`
+	// SizeField names the page-size field in the request body / query
+	// (default "size").
+	SizeField string `json:"sizeField"`
+	// ListPath is the dot path of the list inside the response body, e.g.
+	// "data.list". Required.
+	ListPath string `json:"listPath"`
+	// TotalPath optionally receives the pre-slice list length, e.g.
+	// "data.total".
+	TotalPath string `json:"totalPath"`
+}
+
 // Route describes one declared route in JSON5. The same struct covers
 // single-response (status/headers/body/bodyFile/delay), multi-response
 // (strategy/cases), and proxy modes. Validate() in validate.go enforces
@@ -101,6 +119,10 @@ type Route struct {
 	Strategy string      `json:"strategy"`
 	Cases    []RouteCase `json:"cases"`
 
+	// Paginate slices the list inside body/bodyFile by the request's page
+	// (declarative pagination). Cases inherit it unless they declare their own.
+	Paginate *PaginateConfig `json:"paginate"`
+
 	// Proxy mode (mutex with all of the above except method/path)
 	Proxy *ProxyConfig `json:"proxy"`
 
@@ -120,6 +142,9 @@ type RouteCase struct {
 	Headers  map[string]string `json:"headers"`
 	Body     any               `json:"body"`
 	BodyFile string            `json:"bodyFile"`
+
+	// Paginate overrides the route-level paginate for this case.
+	Paginate *PaginateConfig `json:"paginate"`
 }
 
 // ProxyConfig is the "proxy" sub-block of a Route. Only schema/validate is

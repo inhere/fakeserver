@@ -128,8 +128,8 @@ func Validate(cfg *Config) []error {
 
 		// proxy vs mock mutex
 		if r.Proxy != nil {
-			if r.Body != nil || r.BodyFile != "" || len(r.Cases) > 0 || r.Status != 0 || len(r.Headers) > 0 || r.Delay != "" {
-				errs = append(errs, fmt.Errorf("%s: proxy is mutually exclusive with body/bodyFile/cases/status/headers/delay", prefix))
+			if r.Body != nil || r.BodyFile != "" || len(r.Cases) > 0 || r.Status != 0 || len(r.Headers) > 0 || r.Delay != "" || r.Paginate != nil {
+				errs = append(errs, fmt.Errorf("%s: proxy is mutually exclusive with body/bodyFile/cases/status/headers/delay/paginate", prefix))
 			}
 			if r.Proxy.Target == "" {
 				errs = append(errs, fmt.Errorf("%s: proxy.target is required", prefix))
@@ -152,6 +152,15 @@ func Validate(cfg *Config) []error {
 				if _, err := os.Stat(resolved); err != nil {
 					errs = append(errs, fmt.Errorf("%s: bodyFile %q not found (resolved to %q)", prefix, r.BodyFile, resolved))
 				}
+			}
+		}
+
+		if err := checkPaginate(r.Paginate); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", prefix, err))
+		}
+		for ci, cs := range r.Cases {
+			if err := checkPaginate(cs.Paginate); err != nil {
+				errs = append(errs, fmt.Errorf("%s %s: %w", prefix, caseFieldRef(ci, cs.Name), err))
 			}
 		}
 
@@ -190,6 +199,19 @@ func Validate(cfg *Config) []error {
 	}
 
 	return errs
+}
+
+// checkPaginate validates one paginate block: listPath is required (it names
+// the list to slice). pageField/sizeField may be omitted — the runtime defaults
+// them to "current"/"size". A nil block is valid (pagination off).
+func checkPaginate(p *PaginateConfig) error {
+	if p == nil {
+		return nil
+	}
+	if p.ListPath == "" {
+		return fmt.Errorf("paginate.listPath is required (dot path of the list inside the response body, e.g. data.list)")
+	}
+	return nil
 }
 
 func routeSignature(method, path string) string {

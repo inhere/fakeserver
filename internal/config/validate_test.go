@@ -456,3 +456,35 @@ func TestValidate_HistoryBadMaxBodySize(t *testing.T) {
 		t.Fatalf("expected historyBodyMaxSize error, got %v", errs)
 	}
 }
+
+func TestValidate_PaginateRequiresListPath(t *testing.T) {
+	cfg := &Config{
+		Fallback: "echo",
+		Routes: []Route{{
+			Method:   []string{"GET"},
+			Path:     "/page",
+			Body:     map[string]any{"list": []any{}},
+			Paginate: &PaginateConfig{PageField: "current"},
+		}},
+	}
+	errs := Validate(cfg)
+	if !containsErrorWith(errs, "paginate.listPath", "") {
+		t.Fatalf("expected paginate.listPath error, got %v", errs)
+	}
+}
+
+func TestValidate_PaginateProxyMutex(t *testing.T) {
+	cfg := &Config{
+		Fallback: "echo",
+		Routes: []Route{{
+			Method:   []string{"GET"},
+			Path:     "/proxy",
+			Proxy:    &ProxyConfig{Target: "http://upstream.test"},
+			Paginate: &PaginateConfig{ListPath: "data.list"},
+		}},
+	}
+	errs := Validate(cfg)
+	if !containsErrorWith(errs, "paginate", "proxy") {
+		t.Fatalf("expected paginate/proxy mutex error, got %v", errs)
+	}
+}

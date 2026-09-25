@@ -88,6 +88,18 @@ func respondWithTrace(c *rux.Context, route *config.Route, routeIndex int, mode 
 		}
 	}
 
+	// 4b. Declarative pagination: slice the list inside the (possibly
+	// bodyFile-sourced) response body by the request's page/size.
+	if route.Paginate != nil && len(bodyBytes) > 0 {
+		paginated, perr := paginateBody(route.Paginate, bodyBytes, ctx)
+		if perr != nil {
+			writeErrorWithContext(c.Resp, http.StatusInternalServerError, "paginate error", perr.Error(), route, "paginate", "")
+			return
+		}
+		bodyBytes = paginated
+		bodyForCT = json.RawMessage(bodyBytes) // JSON now — CT inference below picks application/json
+	}
+
 	// 5. Infer Content-Type when not explicit
 	if renderedHeaders["Content-Type"] == "" && bodyForCT != nil {
 		switch bodyForCT.(type) {

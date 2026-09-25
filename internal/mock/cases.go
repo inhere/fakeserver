@@ -131,6 +131,7 @@ func caseAsRoute(outer *config.Route, c *config.RouteCase) *config.Route {
 		Headers:    c.Headers,
 		Body:       c.Body,
 		BodyFile:   c.BodyFile,
+		Paginate:   c.Paginate,
 	}
 	if v.Status == 0 {
 		v.Status = outer.Status
@@ -154,6 +155,9 @@ func caseAsRoute(outer *config.Route, c *config.RouteCase) *config.Route {
 	if v.Body == nil && v.BodyFile == "" {
 		v.Body = outer.Body
 		v.BodyFile = outer.BodyFile
+	}
+	if v.Paginate == nil {
+		v.Paginate = outer.Paginate
 	}
 	return v
 }
