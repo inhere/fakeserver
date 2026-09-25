@@ -5,11 +5,9 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/gookit/gcli/v3"
-	"github.com/inhere/fakeserver/internal/buildinfo"
 )
 
 // Run 构建 fakeserver CLI app，注册所有子命令并启动。
@@ -18,7 +16,7 @@ func Run(version string) {
 	app := gcli.NewApp(func(a *gcli.App) {
 		a.Name = "fakeserver"
 		a.Desc = "Configurable HTTP mock/fake server tool"
-		a.Version = fmt.Sprintf("%s, %s, %s", buildinfo.Version, buildinfo.GitHash, buildinfo.BuildTime)
+		a.Version = versionLine()
 	})
 	app.Add(newServeCmd())
 	app.Add(newInitCmd())
@@ -27,6 +25,7 @@ func Run(version string) {
 	app.Add(newRoutesCmd())
 	app.Add(newListCmd())
 	app.Add(newUseCmd())
+	app.Add(newVersionCmd())
 	code := app.Run(nil)
 	os.Exit(code)
 }
