@@ -143,7 +143,7 @@ func caseAsRoute(outer *config.Route, c *config.RouteCase) *config.Route {
 		v.Headers = outer.Headers
 	} else if len(v.Headers) > 0 && len(outer.Headers) > 0 {
 		// merge: outer keys not in case are added; case wins on conflict
-		merged := make(map[string]string, len(outer.Headers)+len(v.Headers))
+		merged := make(map[string]string, max(len(outer.Headers), len(v.Headers)))
 		for k, val := range outer.Headers {
 			merged[k] = val
 		}

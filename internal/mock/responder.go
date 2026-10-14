@@ -116,6 +116,11 @@ func respondWithTrace(c *rux.Context, route *config.Route, routeIndex int, mode 
 	}
 
 	// 7. Write headers + status + body
+	// Content-Type 先用常量 header 名显式写一次：不再依赖 Go 的内容嗅探，
+	// 同时也让静态分析(CodeQL go/reflected-xss)能看到响应体的类型。
+	if ct := renderedHeaders["Content-Type"]; ct != "" {
+		c.Resp.Header().Set("Content-Type", ct)
+	}
 	for k, v := range renderedHeaders {
 		c.Resp.Header().Set(k, v)
 	}
@@ -140,7 +145,7 @@ func recordRouteTrace(c *rux.Context, route *config.Route, routeIndex int, mode 
 }
 
 func renderHeaders(hdrs map[string]string, r tpl.Renderer, ctx map[string]any) (map[string]string, error) {
-	out := make(map[string]string, len(hdrs)+1)
+	out := make(map[string]string, len(hdrs))
 	for k, v := range hdrs {
 		rendered, err := r.Render(v, ctx)
 		if err != nil {

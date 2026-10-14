@@ -46,7 +46,9 @@ func paginateBody(cfg *config.PaginateConfig, body []byte, ctx map[string]any) (
 		page = len(items) + 1
 	}
 	start := (page - 1) * size
-	pageItems := make([]any, 0, size)
+	// 不拿请求里的 page size 当预分配容量：容量只跟随实际切出的元素个数增长
+	// （CodeQL go/uncontrolled-allocation-size 的 sink 就是 make 的 size 参数）。
+	pageItems := []any{}
 	if start < len(items) {
 		end := start + size
 		if end > len(items) {
