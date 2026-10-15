@@ -16,7 +16,7 @@ require (
 )
 
 require (
-	github.com/gookit/color v1.6.2 // indirect
+	github.com/gookit/color v1.6.3 // indirect
 	github.com/monoculum/formam v3.5.5+incompatible // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/sync v0.20.0 // indirect
