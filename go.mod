@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/brianvoe/gofakeit/v7 v7.17.1
-	github.com/expr-lang/expr v1.17.8
+	github.com/expr-lang/expr v1.18.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gofrs/flock v0.13.1
 	github.com/google/uuid v1.6.0
